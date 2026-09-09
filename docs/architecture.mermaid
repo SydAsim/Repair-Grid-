@@ -1,0 +1,87 @@
+```mermaid
+graph TD
+    subgraph Users ["USERS & CLIENT PORTALS"]
+        R[Resident Mobile: /report, /resident, /verify]
+        W[Field Worker PWA: /worker, /map, /complete]
+        O[Operator Mission Control: /operations, /decisions, /simulate]
+        A[Admin Console: /admin/demo, /admin/policies]
+    end
+
+    subgraph Auth ["AUTHENTICATION & SECURITY"]
+        COG[Amazon Cognito User Pool]
+        ROLES[Cognito Groups: resident, field_worker, operator, admin]
+        COG --- ROLES
+    end
+
+    subgraph Edge ["API & REALTIME GATEWAY"]
+        HTTP_API[API Gateway HTTP API v2]
+        WS_API[API Gateway WebSocket API]
+        AUTH_GUARD[Server-side RBAC Guard]
+        HTTP_API --> AUTH_GUARD
+    end
+
+    subgraph Backend ["APPLICATION & PERSISTENCE"]
+        LAMBDA_API[AWS Lambda: Python 3.12 Backend]
+        DYNAMO[(Amazon DynamoDB: 5 Tables<br/>Reports, Missions, Workers, Decisions, Events)]
+        S3_EVID[(Amazon S3: Private Evidence Bucket<br/>SSE-S3 Presigned URLs)]
+        GEO[Amazon Location Service: Maps, Places, Routes]
+        
+        AUTH_GUARD --> LAMBDA_API
+        LAMBDA_API --> DYNAMO
+        LAMBDA_API --> S3_EVID
+        LAMBDA_API --> GEO
+    end
+
+    subgraph AgentSystem ["STRANDS AUTONOMOUS OPERATIONS NETWORK"]
+        BEDROCK[Amazon Bedrock: us.amazon.nova-2-lite-v1:0]
+        AGENT_RUNTIME[Bedrock AgentCore Runtime]
+        GATEWAY[AgentCore Gateway: 19 Validated MCP Tools]
+        
+        subgraph Graph ["Strands Agent Graph Execution"]
+            N_INTAKE[IntakeAgent]
+            N_GEO[Location & Vision Enrichment]
+            N_DUP{DuplicateAgent: Distance < 50m?}
+            N_MERGE[Merge Duplicate into Canonical Report]
+            N_VERIFY[VerificationAgent]
+            N_RISK[Deterministic 6-Factor Risk Policy Engine]
+            N_OWN{OwnershipAgent: Clear Jurisdiction?}
+            N_MISSION[MissionAgent]
+            N_RES[ResourceAgent: Worker Fit Ranking]
+            N_GUARD{GuardianAgent: Safe & Permitted?}
+            N_EXEC[Execute Worker Assignment]
+            N_HITL[Strands Human-in-the-Loop Interruption]
+            N_COMP[CompletionVerifierAgent: Before/After Vision]
+            
+            N_INTAKE --> N_GEO --> N_DUP
+            N_DUP -->|>= 0.95 Conf| N_MERGE
+            N_DUP -->|< 0.95 Conf| N_VERIFY
+            N_VERIFY --> N_RISK --> N_OWN
+            N_OWN -->|Ambiguous| N_HITL
+            N_OWN -->|Clear| N_MISSION
+            N_MISSION --> N_RES --> N_GUARD
+            N_GUARD -->|Consequential / Critical| N_HITL
+            N_GUARD -->|Safe Autonomy| N_EXEC
+            N_EXEC --> W
+            W -->|Submit Proof| N_COMP
+            N_COMP -->|Critical / Low Conf| N_HITL
+            N_COMP -->|Valid & High Conf| DYNAMO
+        end
+
+        AGENT_RUNTIME --- Graph
+        Graph --- BEDROCK
+        Graph --- GATEWAY
+    end
+
+    subgraph RealtimeBroadcaster ["REALTIME EVENT STREAM"]
+        STREAMS[DynamoDB Streams]
+        BROADCAST_LAMBDA[WebSocket Broadcaster Lambda]
+        DYNAMO --> STREAMS --> BROADCAST_LAMBDA --> WS_API
+        WS_API -.->|Live Push| O
+        WS_API -.->|Timeline Push| R
+    end
+
+    subgraph Governance ["OBSERVABILITY & BUDGETS"]
+        CW[Amazon CloudWatch Metrics & Logs: 7-day retention]
+        BUDGETS[AWS Budgets: $20, $30, $40 Alerts]
+    end
+```

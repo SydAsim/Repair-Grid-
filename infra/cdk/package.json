@@ -1,0 +1,24 @@
+{
+  "name": "@repairgrid/infra-cdk",
+  "version": "0.1.0",
+  "bin": {
+    "repairgrid": "bin/repairgrid.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --all"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "aws-cdk": "^2.1141.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.173.2",
+    "constructs": "^10.4.2"
+  }
+}
