@@ -4,7 +4,7 @@ client = boto3.client("amplify", region_name="us-east-1")
 
 rules = [
     {
-        "source": "</^/worker/missions/([^/]+)/complete$/>",
+        "source": "</^/worker/missions/([^/]+)/complete/?.*$/>",
         "target": "/worker/missions/default/complete/index.html",
         "status": "200"
     },

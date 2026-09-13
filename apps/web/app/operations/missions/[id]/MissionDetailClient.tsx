@@ -578,47 +578,7 @@ export default function MissionDetailClient({ id }: MissionDetailClientProps) {
               )}
             </Card>
 
-            {/* Real-Time Chronological Event History & Audit Log */}
-            <Card className="shadcn-card p-5 border-slate-800 bg-slate-900/70 shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <span className="text-xs font-mono uppercase tracking-wider text-slate-400 font-semibold flex items-center">
-                  <Activity className="h-3.5 w-3.5 mr-1.5 text-indigo-400" />
-                  Immutable Audit Log & Event History
-                </span>
-                <span className="text-[11px] font-mono text-slate-400">
-                  {events.length} Recorded Events
-                </span>
-              </div>
 
-              {events.length === 0 ? (
-                <div className="p-4 text-center text-xs text-slate-500 font-mono">
-                  No event records logged yet for this case.
-                </div>
-              ) : (
-                <div className="space-y-3 relative before:absolute before:inset-0 before:left-2.5 before:w-px before:bg-slate-800">
-                  {events.map((evt, idx) => (
-                    <div key={evt.eventId || idx} className="relative flex items-start space-x-3 text-xs pl-1">
-                      <div className="h-4 w-4 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center flex-shrink-0 z-10 font-mono text-[9px] text-slate-300">
-                        ✓
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <Badge variant="outline" className="font-mono text-[10px] py-0 px-1.5 border-slate-700 text-slate-300">
-                            {evt.eventType}
-                          </Badge>
-                          <span className="text-[10px] font-mono text-slate-500">
-                            {evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : "Recent"}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          {evt.payload?.description || evt.payload?.note || evt.payload?.summary || JSON.stringify(evt.payload || {})}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
           </div>
         </div>
 

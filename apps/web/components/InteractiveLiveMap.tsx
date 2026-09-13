@@ -746,3 +746,5 @@ export function InteractiveLiveMap({
     </div>
   );
 }
+
+export default InteractiveLiveMap;

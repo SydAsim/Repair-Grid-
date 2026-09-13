@@ -21,7 +21,8 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  AlertTriangle
+  AlertTriangle,
+  ChevronRight
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/config";
 import { useWorkerAuth } from "@/lib/auth-context";
@@ -198,7 +199,27 @@ export default function WorkerHomePage() {
     }
   };
 
-  const displayName = profile?.displayName || user?.name || "Ahmed Khan";
+  const handleToggleStatus = async () => {
+    const nextStatus = !isAvailable;
+    setIsAvailable(nextStatus);
+    try {
+      await fetch(`${API_BASE_URL}/api/workers/me/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          availability: nextStatus ? "AVAILABLE" : "OFF_SHIFT",
+        }),
+      });
+      await refresh();
+    } catch (e) {
+      console.warn("Failed to toggle status:", e);
+    }
+  };
+
+  const displayName = profile?.displayName || "Ahmed Khan";
   const initials = displayName
     .split(" ")
     .map((part) => part[0])
@@ -257,8 +278,8 @@ export default function WorkerHomePage() {
             </div>
 
             {authError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-400 flex items-start space-x-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center space-x-2">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                 <span>{authError}</span>
               </div>
             )}
@@ -272,8 +293,7 @@ export default function WorkerHomePage() {
                       <User className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
                       <input
                         type="text"
-                        autoComplete="name"
-                        placeholder="e.g. Ahmed Khan"
+                        placeholder="Ahmed Khan"
                         value={authName}
                         onChange={(e) => setAuthName(e.target.value)}
                         className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
@@ -289,10 +309,10 @@ export default function WorkerHomePage() {
                       onChange={(e) => setAuthDepartment(e.target.value)}
                       className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500"
                     >
-                      <option value="electrical">Electrical Specialist (Streetlights, Wiring)</option>
-                      <option value="plumbing_drainage">Plumbing & Drainage (Blocked Drains)</option>
-                      <option value="roads">Roads & Pavement (Potholes, Asphalt)</option>
-                      <option value="facilities">General Facilities & Signage</option>
+                      <option value="electrical">Electrical & Lighting</option>
+                      <option value="roads">Roads & Pavement</option>
+                      <option value="plumbing_drainage">Plumbing & Stormwater Drainage</option>
+                      <option value="facilities">General Facilities Maintenance</option>
                     </select>
                   </div>
                 </>
@@ -405,8 +425,9 @@ export default function WorkerHomePage() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg mx-auto w-full p-4 sm:p-6 space-y-6">
-        <div className="glass-panel rounded-2xl p-5 border border-amber-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/20">
+      <main className="flex-1 max-w-lg mx-auto w-full p-4 sm:p-6 space-y-5">
+        {/* Worker Profile Card with Shift Toggle */}
+        <div className="glass-panel rounded-2xl p-5 border border-amber-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/20 shadow-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3.5">
               <div className="h-12 w-12 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold text-lg">
@@ -420,11 +441,11 @@ export default function WorkerHomePage() {
               </div>
             </div>
             <button 
-              onClick={() => setIsAvailable(!isAvailable)} 
+              onClick={handleToggleStatus} 
               className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center space-x-1.5 border ${
                 isAvailable 
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
-                  : "bg-slate-800 text-slate-400 border-slate-700"
+                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20" 
+                  : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750"
               }`}
             >
               <span className={`h-2 w-2 rounded-full ${isAvailable ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} />
@@ -448,6 +469,41 @@ export default function WorkerHomePage() {
             </div>
           </div>
         </div>
+
+        {/* Off-Shift Warning Alert */}
+        {!isAvailable && (
+          <div className="rounded-2xl p-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-start space-x-3 text-xs">
+            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="font-bold block text-sm text-amber-200">Shift Status: OFF-SHIFT</strong>
+              <p className="mt-0.5 text-amber-400/90 text-[11px] leading-relaxed">
+                Autonomous matching and dispatch offers are paused while you are off shift. Toggle your status back to Available to accept new campus work orders.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Route Planning & Geospatial Dispatch CTA */}
+        <Link 
+          href="/worker/map" 
+          className="glass-panel-interactive rounded-2xl p-4 border border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900 to-purple-950/30 flex items-center justify-between group hover:border-indigo-500/60 transition shadow-lg shadow-indigo-950/20"
+        >
+          <div className="flex items-center space-x-3.5">
+            <div className="h-10 w-10 rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 flex items-center justify-center group-hover:scale-105 transition">
+              <Route className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-xs font-bold text-white">Route Planning & Geospatial Dispatch</h3>
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">LIVE MAP</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Inspect optimized driving routes, asset locations & safety perimeters across campus.
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-slate-500 group-hover:text-white transition" />
+        </Link>
 
         {/* Real-time Notifications */}
         <section>
