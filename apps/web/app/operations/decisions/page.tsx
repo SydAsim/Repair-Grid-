@@ -16,41 +16,20 @@ import {
 } from "lucide-react";
 
 export default function DecisionsInboxPage() {
-  const [decisions, setDecisions] = useState<any[]>([
-    {
-      decisionId: "DEC-RAIN-001",
-      missionId: "RG-3011",
-      type: "SAFETY_CRITICAL_ESCALATION",
-      title: "Blocked drain beside campus primary school",
-      proposedAction: "Escalate priority to CRITICAL and dispatch emergency suction equipment",
-      agentName: "RiskAgent",
-      confidence: 0.96,
-      currentPriority: "HIGH (82)",
-      suggestedPriority: "CRITICAL (95)",
-      location: "Campus Primary School Entrance",
-      evidence: [
-        "7 corroborating citizen reports merged autonomously",
-        "Primary school entrance location with high child pedestrian traffic",
-        "Standing water depth exceeds 10cm",
-        "Weather forecast indicates continued rain for next 3 hours"
-      ],
-      status: "PENDING"
-    }
-  ]);
-
+  const [decisions, setDecisions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [resolvedStatus, setResolvedStatus] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch("http://localhost:8000/api/ops/decisions?status=PENDING", {
       headers: { "X-Mock-Role": "operator" }
     })
-      .then(res => res.ok ? res.json() : null)
+      .then(res => res.ok ? res.json() : [])
       .then(data => {
-        if (data && data.length > 0) {
-          setDecisions(data);
-        }
+        setDecisions(Array.isArray(data) ? data : []);
       })
-      .catch(() => {});
+      .catch(() => setDecisions([]))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleResolve = async (id: string, action: "approve" | "reject") => {
@@ -192,6 +171,15 @@ export default function DecisionsInboxPage() {
               </div>
             );
           })}
+          {decisions.length === 0 && !loading && (
+            <div className="glass-panel rounded-2xl p-12 border border-slate-800 text-center space-y-3">
+              <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto" />
+              <h3 className="text-base font-bold text-white">Decision Inbox is Clear</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                No human-in-the-loop approvals pending. All active resident reports are either routine or progressing autonomously.
+              </p>
+            </div>
+          )}
         </div>
       </main>
     </div>

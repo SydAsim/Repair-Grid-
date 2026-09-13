@@ -1,4 +1,4 @@
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict
 from pydantic import BaseModel, Field
 from .mission_schemas import RiskBand
 
@@ -46,6 +46,8 @@ class WorkerMatchResult(BaseModel):
     skill_score: float
     distance_km: float
     reasons: List[str]
+    factors: Optional[Dict[str, float]] = None
+    match_percentage: Optional[int] = None
 
 class GuardianCheckResult(BaseModel):
     action_allowed: bool

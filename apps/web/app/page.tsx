@@ -36,14 +36,14 @@ export default function HomePage() {
           <div className="flex items-center space-x-3">
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
-              Campus District Live
+              Live Operations Network
             </span>
             <Link
-              href="/operations/simulate"
-              className="inline-flex items-center space-x-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
+              href="/worker"
+              className="inline-flex items-center space-x-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition shadow-sm"
             >
-              <Zap className="h-3.5 w-3.5" />
-              <span>Chaos Simulator</span>
+              <Wrench className="h-3.5 w-3.5" />
+              <span>Technician Portal</span>
             </Link>
           </div>
         </div>

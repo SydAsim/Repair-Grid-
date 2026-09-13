@@ -9,6 +9,13 @@ security = HTTPBearer(auto_error=False)
 
 CANONICAL_ROLES = {"resident", "field_worker", "operator", "admin"}
 
+LOCAL_DEMO_IDENTITIES = {
+    "resident": "resident-demo-001",
+    "field_worker": "worker-electric-001",
+    "operator": "operator-demo-001",
+    "admin": "admin-demo-001",
+}
+
 class AuthenticatedUser(BaseModel):
     user_id: str
     email: str
@@ -31,8 +38,8 @@ def get_current_user(
         if mock_role not in CANONICAL_ROLES:
             raise HTTPException(status_code=400, detail=f"Invalid mock role: {mock_role}")
         return AuthenticatedUser(
-            user_id=mock_user_id or f"user-{mock_role}-001",
-            email=mock_email or f"{mock_role}@repairgrid.demo",
+            user_id=mock_user_id or LOCAL_DEMO_IDENTITIES[mock_role],
+            email=mock_email or "local-session@repairgrid.invalid",
             roles=[mock_role]
         )
 

@@ -1,57 +1,426 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { 
   ArrowLeft, 
-  Wrench, 
+  Bell, 
+  CheckCircle2, 
+  Clock, 
   MapPin, 
   Navigation, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
+  Route, 
   Zap,
-  Route,
-  UserCheck
+  Wrench,
+  Lock,
+  Mail,
+  User,
+  LogOut,
+  RefreshCw,
+  Sparkles,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  AlertTriangle
 } from "lucide-react";
+import { API_BASE_URL } from "@/lib/config";
+import { useWorkerAuth } from "@/lib/auth-context";
+
+type WorkerProfile = {
+  workerId: string;
+  displayName: string;
+  department: string;
+  zone: string;
+  availability: string;
+};
+
+type Mission = {
+  mission_id: string;
+  title: string;
+  description?: string;
+  location?: string;
+  risk_band: string;
+  status: string;
+};
+
+type WorkerNotification = {
+  notificationId: string;
+  title: string;
+  message: string;
+  missionId: string;
+  actionUrl: string;
+  priority: string;
+  createdAt: string;
+  readAt?: string | null;
+  deliveryStatus: string;
+};
 
 export default function WorkerHomePage() {
-  const [isAvailable, setIsAvailable] = useState(true);
+  const { user, isLoading: authLoading, login, register, logout, getAuthHeaders } = useWorkerAuth();
 
+  // Auth UI state
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authDepartment, setAuthDepartment] = useState("electrical");
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+
+  // Worker Operational State
+  const [isAvailable, setIsAvailable] = useState(true);
+  const [profile, setProfile] = useState<WorkerProfile | null>(null);
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [notifications, setNotifications] = useState<WorkerNotification[]>([]);
+  const [busyMission, setBusyMission] = useState<string | null>(null);
+  const announced = useRef(new Set<string>());
+
+  const refresh = useCallback(async () => {
+    if (!user) return;
+    const headers = getAuthHeaders();
+    try {
+      const [profileResponse, missionResponse, notificationResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/workers/me`, { headers, cache: "no-store" }),
+        fetch(`${API_BASE_URL}/api/missions/assigned`, { headers, cache: "no-store" }),
+        fetch(`${API_BASE_URL}/api/workers/me/notifications`, { headers, cache: "no-store" }),
+      ]);
+
+      if (profileResponse.ok) setProfile(await profileResponse.json());
+      if (missionResponse.ok) setMissions(await missionResponse.json());
+      if (notificationResponse.ok) {
+        const nextNotifications: WorkerNotification[] = await notificationResponse.json();
+        setNotifications(nextNotifications);
+        const latestUnread = nextNotifications.find((item) => !item.readAt);
+        if (
+          latestUnread &&
+          !announced.current.has(latestUnread.notificationId) &&
+          typeof Notification !== "undefined" &&
+          Notification.permission === "granted"
+        ) {
+          new Notification(latestUnread.title, { body: latestUnread.message });
+          announced.current.add(latestUnread.notificationId);
+        }
+      }
+    } catch (e) {
+      console.warn("Worker refresh error:", e);
+    }
+  }, [user, getAuthHeaders]);
+
+  useEffect(() => {
+    if (user) {
+      refresh().catch(() => undefined);
+      const timer = window.setInterval(() => refresh().catch(() => undefined), 2000);
+      return () => window.clearInterval(timer);
+    }
+  }, [user, refresh]);
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthSubmitting(true);
+
+    if (authMode === "register") {
+      if (!authName.trim()) {
+        setAuthError("Please enter your full name.");
+        setAuthSubmitting(false);
+        return;
+      }
+      if (!authEmail.trim() || !authEmail.includes("@")) {
+        setAuthError("Please enter a valid email address.");
+        setAuthSubmitting(false);
+        return;
+      }
+      if (authPassword.length < 4) {
+        setAuthError("Password must be at least 4 characters.");
+        setAuthSubmitting(false);
+        return;
+      }
+      const res = await register(authName, authEmail, authPassword, authDepartment);
+      if (!res.success) {
+        setAuthError(res.error || "Technician registration failed.");
+      }
+    } else {
+      if (!authEmail.trim()) {
+        setAuthError("Please enter your email.");
+        setAuthSubmitting(false);
+        return;
+      }
+      const res = await login(authEmail, authPassword);
+      if (!res.success) {
+        setAuthError(res.error || "Login failed. Check your credentials.");
+      }
+    }
+    setAuthSubmitting(false);
+  };
+
+  const handleQuickLogin = async (demoEmail: string) => {
+    setAuthError("");
+    setAuthSubmitting(true);
+    setAuthEmail(demoEmail);
+    setAuthPassword("password123");
+    const res = await login(demoEmail, "password123");
+    if (!res.success) {
+      setAuthError(res.error || "Quick login failed.");
+    }
+    setAuthSubmitting(false);
+  };
+
+  const unread = notifications.filter((item) => !item.readAt).length;
+  const orderedMissions = useMemo(
+    () => [...missions].sort((a, b) => Number(a.status !== "AWAITING_ACCEPTANCE") - Number(b.status !== "AWAITING_ACCEPTANCE")),
+    [missions]
+  );
+  const nextMission = orderedMissions[0];
+
+  const markRead = async (notificationId: string) => {
+    await fetch(`${API_BASE_URL}/api/workers/me/notifications/${notificationId}/read`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+    await refresh();
+  };
+
+  const enableAlerts = async () => {
+    if (typeof Notification !== "undefined") await Notification.requestPermission();
+  };
+
+  const acceptMission = async (missionId: string) => {
+    setBusyMission(missionId);
+    try {
+      await fetch(`${API_BASE_URL}/api/missions/${missionId}/accept`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+      await refresh();
+    } finally {
+      setBusyMission(null);
+    }
+  };
+
+  const displayName = profile?.displayName || user?.name || "Ahmed Khan";
+  const initials = displayName
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  // If not logged in as Technician, render Login / Register view
+  if (!user && !authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+        <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-4 py-3 sticky top-0 z-40 flex items-center justify-between">
+          <Link href="/" className="inline-flex items-center text-xs font-semibold text-slate-400 hover:text-white transition">
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back to Home
+          </Link>
+          <span className="font-bold text-xs tracking-wider text-amber-400">FIELD TECHNICIAN PORTAL</span>
+          <div className="w-12" />
+        </header>
+
+        <main className="flex-1 max-w-md mx-auto w-full p-4 sm:p-6 flex flex-col justify-center">
+          <div className="glass-panel rounded-2xl p-6 sm:p-8 border border-amber-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 shadow-2xl shadow-amber-950/20 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
+                <Wrench className="h-7 w-7" />
+              </div>
+              <h1 className="text-2xl font-extrabold text-white">Technician Access</h1>
+              <p className="text-xs text-slate-400">
+                Log in or register your field technician profile to accept live dispatched repairs and upload proofs.
+              </p>
+            </div>
+
+            {/* Auth Mode Toggle */}
+            <div className="grid grid-cols-2 p-1 bg-slate-950/80 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setAuthMode("login"); setAuthError(""); }}
+                className={`py-2 text-xs font-bold rounded-lg transition ${
+                  authMode === "login" 
+                    ? "bg-amber-500 text-slate-950 shadow" 
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode("register"); setAuthError(""); }}
+                className={`py-2 text-xs font-bold rounded-lg transition ${
+                  authMode === "register" 
+                    ? "bg-amber-500 text-slate-950 shadow" 
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Register
+              </button>
+            </div>
+
+            {authError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-400 flex items-start space-x-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              {authMode === "register" && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
+                    <div className="relative">
+                      <User className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
+                      <input
+                        type="text"
+                        placeholder="e.g. Ahmed Khan"
+                        value={authName}
+                        onChange={(e) => setAuthName(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Trade Department</label>
+                    <select
+                      value={authDepartment}
+                      onChange={(e) => setAuthDepartment(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="electrical">Electrical Specialist (Streetlights, Wiring)</option>
+                      <option value="plumbing_drainage">Plumbing & Drainage (Blocked Drains)</option>
+                      <option value="roads">Roads & Pavement (Potholes, Asphalt)</option>
+                      <option value="facilities">General Facilities & Signage</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Work Email</label>
+                <div className="relative">
+                  <Mail className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
+                  <input
+                    type="email"
+                    placeholder="technician@repairgrid.demo"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Password</label>
+                <div className="relative">
+                  <Lock className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={authSubmitting}
+                className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-amber-500/20 flex items-center justify-center space-x-2 disabled:opacity-60"
+              >
+                {authSubmitting ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>{authMode === "login" ? "Sign In to Field Dashboard" : "Register Technician Account"}</span>
+                    <ShieldCheck className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Quick Demo Pre-fill */}
+            <div className="pt-4 border-t border-slate-800 space-y-2">
+              <span className="text-[10px] font-semibold text-slate-400 block uppercase text-center tracking-wider">
+                Instant 1-Click Demo Accounts
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin("worker.electric@repairgrid.demo")}
+                  className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-950 border border-amber-500/30 text-left transition flex flex-col"
+                >
+                  <span className="text-xs font-bold text-amber-400">Ahmed Khan</span>
+                  <span className="text-[10px] text-slate-400">Electrical Specialist</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin("worker.plumber@repairgrid.demo")}
+                  className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-950 border border-slate-800 text-left transition flex flex-col"
+                >
+                  <span className="text-xs font-bold text-indigo-400">Marcus Thorne</span>
+                  <span className="text-[10px] text-slate-400">Drainage Specialist</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Authenticated Field Technician Dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-4 py-3 sticky top-0 z-40 flex items-center justify-between">
         <Link href="/" className="inline-flex items-center text-xs font-semibold text-slate-400 hover:text-white transition">
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Home
+          <ArrowLeft className="h-4 w-4 mr-1" /> Home
         </Link>
         <span className="font-bold text-xs tracking-wider text-amber-400">FIELD OPERATIONS</span>
-        <Link href="/worker/map" className="text-xs font-semibold text-indigo-400 flex items-center">
-          <Route className="h-3.5 w-3.5 mr-1" />
-          Route
-        </Link>
+        <div className="flex items-center space-x-3">
+          <Link href="/worker/map" className="text-xs font-semibold text-indigo-400 flex items-center">
+            <Route className="h-3.5 w-3.5 mr-1" /> Route
+          </Link>
+          <button
+            onClick={() => logout()}
+            className="text-xs font-semibold text-slate-400 hover:text-rose-400 flex items-center transition"
+            title="Sign Out"
+          >
+            <LogOut className="h-3.5 w-3.5 mr-1" /> Logout
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 max-w-lg mx-auto w-full p-4 sm:p-6 space-y-6">
-        {/* Worker Profile Card */}
         <div className="glass-panel rounded-2xl p-5 border border-amber-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3.5">
               <div className="h-12 w-12 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold text-lg">
-                AK
+                {initials}
               </div>
               <div>
-                <h1 className="text-lg font-bold text-white">Ahmed Khan</h1>
-                <p className="text-xs text-slate-400">Electrical Specialist • North Campus</p>
+                <h1 className="text-lg font-bold text-white">{displayName}</h1>
+                <p className="text-xs text-slate-400 capitalize">
+                  {profile?.department || "Electrical"} Specialist • {(profile?.zone || "campus_all").replaceAll("_", " ")}
+                </p>
               </div>
             </div>
-
-            <button
-              onClick={() => setIsAvailable(!isAvailable)}
+            <button 
+              onClick={() => setIsAvailable(!isAvailable)} 
               className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center space-x-1.5 border ${
-                isAvailable
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                isAvailable 
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
                   : "bg-slate-800 text-slate-400 border-slate-700"
               }`}
             >
@@ -59,93 +428,170 @@ export default function WorkerHomePage() {
               <span>{isAvailable ? "AVAILABLE" : "OFF SHIFT"}</span>
             </button>
           </div>
-
-          {/* Today's Route Metric Pill */}
           <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-800 text-center">
             <div className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/60">
               <span className="text-[10px] text-slate-400 block uppercase">Missions</span>
-              <span className="text-sm font-extrabold text-white">3 Active</span>
+              <span className="text-sm font-extrabold text-white">{missions.length} Active</span>
             </div>
             <div className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/60">
-              <span className="text-[10px] text-slate-400 block uppercase">Route</span>
-              <span className="text-sm font-extrabold text-indigo-400">7.4 km</span>
+              <span className="text-[10px] text-slate-400 block uppercase">Offers</span>
+              <span className="text-sm font-extrabold text-indigo-400">
+                {missions.filter((mission) => mission.status === "AWAITING_ACCEPTANCE").length}
+              </span>
             </div>
             <div className="bg-slate-950/60 rounded-xl p-2.5 border border-slate-800/60">
-              <span className="text-[10px] text-slate-400 block uppercase">Est. Time</span>
-              <span className="text-sm font-extrabold text-emerald-400">~2h 10m</span>
+              <span className="text-[10px] text-slate-400 block uppercase">Alerts</span>
+              <span className="text-sm font-extrabold text-amber-400">{unread} New</span>
             </div>
           </div>
         </div>
 
-        {/* Priority Next Mission Hero Card */}
-        <div>
+        {/* Real-time Notifications */}
+        <section>
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Next Dispatched Mission</h2>
-            <span className="text-[11px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-              🔴 HIGH PRIORITY
-            </span>
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center">
+              <Bell className="h-3.5 w-3.5 mr-1.5" /> Notifications
+            </h2>
+            <button onClick={enableAlerts} className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300">
+              Enable device alerts
+            </button>
           </div>
-
-          <div className="glass-panel rounded-2xl p-5 border border-indigo-500/40 space-y-4 bg-slate-900/90 shadow-xl shadow-indigo-950/20">
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="text-[10px] font-bold text-slate-400">MISSION RG-2841</span>
-                <h3 className="text-lg font-bold text-white mt-0.5">Broken Streetlight</h3>
-                <p className="text-xs text-slate-400 flex items-center mt-1">
-                  <MapPin className="h-3.5 w-3.5 mr-1 text-slate-500" />
-                  University Gate 2 • 1.2 km away
-                </p>
+          <div className="space-y-2">
+            {notifications.slice(0, 3).map((notification) => (
+              <Link 
+                key={notification.notificationId} 
+                href={notification.actionUrl} 
+                onClick={async (event) => { 
+                  event.preventDefault(); 
+                  await markRead(notification.notificationId); 
+                  window.location.href = notification.actionUrl; 
+                }} 
+                className={`glass-panel-interactive rounded-xl p-3.5 flex items-start gap-3 ${
+                  !notification.readAt ? "border-amber-500/40 bg-amber-950/15" : "border-slate-800"
+                }`}
+              >
+                <span className={`mt-0.5 h-8 w-8 rounded-lg flex items-center justify-center ${
+                  !notification.readAt ? "bg-amber-500/15 text-amber-400" : "bg-slate-800 text-slate-400"
+                }`}>
+                  <Bell className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-2">
+                    <strong className="text-xs text-white">{notification.title}</strong>
+                    {!notification.readAt && <span className="h-2 w-2 rounded-full bg-amber-400" />}
+                  </span>
+                  <span className="mt-1 block text-[11px] leading-4 text-slate-400">
+                    {notification.message}
+                  </span>
+                </span>
+              </Link>
+            ))}
+            {notifications.length === 0 && (
+              <div className="glass-panel rounded-xl border border-slate-800 p-4 text-center text-xs text-slate-500">
+                No new mission notifications. Real-time updates active.
               </div>
-              <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center flex-shrink-0">
-                <Zap className="h-5 w-5" />
+            )}
+          </div>
+        </section>
+
+        {/* Primary Dispatched Mission */}
+        {nextMission ? (
+          <section>
+            <div className="flex items-center justify-between mb-2.5">
+              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                {nextMission.status === "AWAITING_ACCEPTANCE" ? "New Dispatched Offer (Live)" : "Active Mission"}
+              </h2>
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                nextMission.risk_band === "HIGH" || nextMission.risk_band === "CRITICAL"
+                  ? "text-rose-400 bg-rose-500/10 border-rose-500/20" 
+                  : "text-amber-400 bg-amber-500/10 border-amber-500/20"
+              }`}>
+                {nextMission.risk_band} PRIORITY
+              </span>
+            </div>
+            <div className="glass-panel rounded-2xl p-5 border border-indigo-500/40 space-y-4 bg-slate-900/90 shadow-xl shadow-indigo-950/20">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 font-mono">MISSION {nextMission.mission_id}</span>
+                  <h3 className="text-lg font-bold text-white mt-0.5">{nextMission.title}</h3>
+                  <p className="text-xs text-slate-400 flex items-center mt-1">
+                    <MapPin className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                    {nextMission.location || "Location supplied with report"}
+                  </p>
+                </div>
+                <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                  <Zap className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="text-xs text-slate-300 bg-slate-950/80 p-3 rounded-xl border border-slate-800 leading-relaxed">
+                {nextMission.description || "Review the reported issue and complete the authorized repair scope."}
+              </p>
+              <div className="pt-2 flex items-center space-x-3">
+                {nextMission.status === "AWAITING_ACCEPTANCE" ? (
+                  <button 
+                    onClick={() => acceptMission(nextMission.mission_id)} 
+                    disabled={busyMission === nextMission.mission_id} 
+                    className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-xs font-bold text-white transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/30"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>{busyMission ? "Accepting..." : "Accept Mission & Dispatch"}</span>
+                  </button>
+                ) : (
+                  <Link 
+                    href={`/worker/missions/${nextMission.mission_id}`} 
+                    className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white text-center transition flex items-center justify-center space-x-2"
+                  >
+                    <Navigation className="h-4 w-4" />
+                    <span>Open Mission Details</span>
+                  </Link>
+                )}
+                <span className="py-3 px-4 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300 flex items-center">
+                  <Clock className="h-3.5 w-3.5 mr-1" />
+                  {nextMission.status.replaceAll("_", " ")}
+                </span>
               </div>
             </div>
-
-            <p className="text-xs text-slate-300 bg-slate-950/80 p-3 rounded-xl border border-slate-800 leading-relaxed">
-              Streetlight inactive for 3 nights. Inspect LED driver & junction circuit. Dispatched by Strands ResourceAgent (96% fit match).
+          </section>
+        ) : (
+          <section className="glass-panel rounded-2xl p-6 border border-slate-800 text-center space-y-3">
+            <div className="h-10 w-10 rounded-xl bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            </div>
+            <h3 className="text-sm font-bold text-white">All Dispatched Cases Addressed</h3>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto">
+              Standing by for incoming resident reports. When a report is submitted, it will appear here instantly.
             </p>
+          </section>
+        )}
 
-            <div className="pt-2 flex items-center space-x-3">
-              <Link
-                href="/worker/missions/RG-2841"
-                className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white text-center transition shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2"
-              >
-                <Navigation className="h-4 w-4" />
-                <span>Start Mission</span>
-              </Link>
-              <Link
-                href="/worker/missions/RG-2841/complete"
-                className="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 text-center transition"
-              >
-                Submit Proof
-              </Link>
+        {/* Additional Missions Queue */}
+        {orderedMissions.length > 1 && (
+          <section>
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+              Other Assigned & District Cases ({orderedMissions.length - 1})
+            </h2>
+            <div className="space-y-2.5">
+              {orderedMissions.slice(1).map((mission) => (
+                <Link 
+                  key={mission.mission_id} 
+                  href={`/worker/missions/${mission.mission_id}`} 
+                  className="glass-panel-interactive rounded-xl p-3.5 flex items-center justify-between border border-slate-800"
+                >
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-mono">{mission.mission_id}</span>
+                    <h4 className="text-xs font-bold text-white">{mission.title}</h4>
+                    <p className="text-[11px] text-slate-400">
+                      {mission.location || "Location provided"} • {mission.risk_band}
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-1 rounded-md">
+                    {mission.status.replaceAll("_", " ")}
+                  </span>
+                </Link>
+              ))}
             </div>
-          </div>
-        </div>
-
-        {/* Remaining Today's Queue */}
-        <div>
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">Later Today</h2>
-          <div className="space-y-2.5">
-            <div className="glass-panel rounded-xl p-3.5 flex items-center justify-between border border-slate-800">
-              <div>
-                <span className="text-[10px] text-slate-500 font-mono">RG-2953</span>
-                <h4 className="text-xs font-bold text-white">Library Quad Post 4 Lamp</h4>
-                <p className="text-[11px] text-slate-400">2.1 km • Medium Priority</p>
-              </div>
-              <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-1 rounded-md">Queued</span>
-            </div>
-
-            <div className="glass-panel rounded-xl p-3.5 flex items-center justify-between border border-slate-800">
-              <div>
-                <span className="text-[10px] text-slate-500 font-mono">RG-2970</span>
-                <h4 className="text-xs font-bold text-white">Science Block Walkway Lantern</h4>
-                <p className="text-[11px] text-slate-400">4.1 km • Routine</p>
-              </div>
-              <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-1 rounded-md">Queued</span>
-            </div>
-          </div>
-        </div>
+          </section>
+        )}
       </main>
     </div>
   );

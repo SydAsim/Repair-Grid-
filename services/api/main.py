@@ -1,9 +1,19 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load root .env if it exists
+env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+else:
+    load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
-from .routers import uploads, reports, workers, operations, admin
+from .routers import uploads, reports, workers, operations, admin, auth
 
 app = FastAPI(
     title="RepairGrid API",
@@ -21,6 +31,7 @@ app.add_middleware(
 )
 
 # Attach Routers
+app.include_router(auth.router, prefix="/api")
 app.include_router(uploads.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(reports.map_router, prefix="/api")
@@ -30,6 +41,15 @@ app.include_router(operations.router, prefix="/api")
 app.include_router(operations.decisions_router, prefix="/api")
 app.include_router(operations.sim_router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+
+
+@app.on_event("startup")
+def on_startup():
+    try:
+        from scripts.seed_demo import seed_campus_district
+        seed_campus_district()
+    except Exception as e:
+        print(f"Demo seed warning: {e}")
 
 @app.get("/api/health")
 def health_check():

@@ -66,3 +66,9 @@ Thumbs.db
 # Temporary uploads / scratch
 scratch/
 tmp/
+*.zip
+*.tsbuildinfo
+*.sqlite
+*.sqlite3
+infra/cdk/bin/*.js
+infra/cdk/bin/*.d.ts

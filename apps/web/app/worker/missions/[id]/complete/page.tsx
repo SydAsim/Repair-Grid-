@@ -16,11 +16,15 @@ import {
   RefreshCw
 } from "lucide-react";
 
+import { useWorkerAuth } from "@/lib/auth-context";
+import { API_BASE_URL } from "@/lib/config";
+
 type Outcome = "REPAIRED" | "TEMPORARY_REPAIR" | "REQUIRES_SPECIALIST" | "UNABLE_TO_RESOLVE";
 
 export default function WorkerCompletionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { getAuthHeaders } = useWorkerAuth();
   const [outcome, setOutcome] = useState<Outcome>("REPAIRED");
   const [notes, setNotes] = useState("Replaced failed LED module. Light tested successfully.");
   const [photoTaken, setPhotoTaken] = useState(true);
@@ -30,11 +34,11 @@ export default function WorkerCompletionPage({ params }: { params: Promise<{ id:
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/missions/${id}/completion`, {
+      const res = await fetch(`${API_BASE_URL}/api/missions/${id}/completion`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Mock-Role": "field_worker",
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           outcome,

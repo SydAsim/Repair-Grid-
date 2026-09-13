@@ -18,13 +18,13 @@ def rank_workers(
     workers: List[Dict[str, Any]]
 ) -> List[WorkerMatchResult]:
     """
-    Ranks technicians deterministically:
-    - Skill match (40%): MUST have required skill, otherwise excluded (0 fit)
-    - Availability (25%): AVAILABLE=100%, ASSIGNED=30%, OFF_SHIFT=0%
-    - Distance (15%): Scaled 0 to 5 km
-    - Active workload (10%): 0 tasks=100%, 1 task=50%
-    - Zone match (5%): Same zone=100%, campus_all=80%, other=50%
-    - Specialization match (5%)
+    Ranks technicians dynamically using 6 explainable factors:
+    - Skill Match (40%): MUST have certified trade skill
+    - Distance (15%): Scaled proximity in km
+    - Workload (10%): Active mission load
+    - Availability (15%): AVAILABLE=15, ASSIGNED=6, OFF_SHIFT=0
+    - Location Coverage (10%): Same zone=10, campus_all=9, other=5
+    - Certification (10%): Trade certifications & safety level
     """
     results: List[WorkerMatchResult] = []
 
@@ -34,49 +34,78 @@ def rank_workers(
             # Worker not qualified for this trade
             continue
 
-        skill_score = 100.0
+        # 1. Skill Match (40%)
+        skill_factor = 40.0
 
-        # Availability
+        # 2. Availability (15%)
         avail = w.get("availability", "AVAILABLE")
-        avail_score = 100.0 if avail == "AVAILABLE" else (30.0 if avail == "ASSIGNED" else 0.0)
+        if avail == "AVAILABLE":
+            avail_factor = 15.0
+        elif avail == "ASSIGNED":
+            avail_factor = 6.0
+        else:
+            avail_factor = 0.0
 
-        # Distance
+        # 3. Distance (15%)
         w_lat = w.get("lastLat", target_lat)
         w_lng = w.get("lastLng", target_lng)
         dist_km = haversine_km(target_lat, target_lng, w_lat, w_lng)
-        dist_score = max(0.0, 100.0 - (dist_km * 20.0))
+        dist_factor = max(0.0, 15.0 - (dist_km * 2.5))
 
-        # Workload
+        # 4. Workload (10%)
         active_task = 1 if w.get("activeMissionId") else 0
-        workload_score = 100.0 if active_task == 0 else 40.0
+        workload_factor = 10.0 if active_task == 0 else 4.0
 
-        # Zone
+        # 5. Location Coverage (10%)
         w_zone = w.get("zone", "")
-        zone_score = 100.0 if w_zone == zone else (80.0 if w_zone == "campus_all" else 50.0)
+        if w_zone == zone:
+            coverage_factor = 10.0
+        elif w_zone == "campus_all":
+            coverage_factor = 9.0
+        else:
+            coverage_factor = 5.0
 
-        total_match = (
-            (skill_score * 0.40) +
-            (avail_score * 0.25) +
-            (dist_score * 0.15) +
-            (workload_score * 0.10) +
-            (zone_score * 0.05) +
-            (5.0) # Base specialization
-        )
-        total_match = round(min(100.0, total_match) / 100.0, 2)
+        # 6. Certification (10%)
+        certs = w.get("certifications", [])
+        if not certs and skills:
+            certs = [s.upper() + "_CERT" for s in skills]
+        if len(certs) >= 2:
+            cert_factor = 10.0
+        elif len(certs) == 1:
+            cert_factor = 8.0
+        else:
+            cert_factor = 6.0
+
+        total_pts = skill_factor + dist_factor + workload_factor + avail_factor + coverage_factor + cert_factor
+        match_pct = int(min(100, round(total_pts)))
+        total_match = round(min(1.0, total_pts / 100.0), 2)
+
+        factors_dict = {
+            "skill": int(round(skill_factor)),
+            "distance": int(round(dist_factor)),
+            "workload": int(round(workload_factor)),
+            "availability": int(round(avail_factor)),
+            "coverage": int(round(coverage_factor)),
+            "certification": int(round(cert_factor)),
+        }
 
         reasons = [
-            f"Qualified in {required_skill}",
-            f"{avail} status",
-            f"{dist_km} km from site"
+            f"Certified in {required_skill} ({factors_dict['skill']}%)",
+            f"Shift availability: {avail} ({factors_dict['availability']}%)",
+            f"{w_zone.replace('_', ' ').title()} coverage ({factors_dict['coverage']}%)",
+            f"Proximity: {dist_km} km ({factors_dict['distance']}%)",
+            f"High skill match: {match_pct}%"
         ]
 
         results.append(WorkerMatchResult(
             worker_id=w.get("workerId", ""),
             display_name=w.get("displayName", "Technician"),
             match_score=total_match,
-            skill_score=skill_score,
+            skill_score=100.0,
             distance_km=dist_km,
-            reasons=reasons
+            reasons=reasons,
+            factors=factors_dict,
+            match_percentage=match_pct
         ))
 
     # Sort descending by match score
