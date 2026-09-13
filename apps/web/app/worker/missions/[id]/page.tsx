@@ -1,5 +1,13 @@
 import WorkerMissionClient from "./WorkerMissionClient";
 
+export function generateStaticParams() {
+  return [
+    { id: "default" },
+    { id: "RG-M-DE042E" },
+    { id: "RG-M-CB94EA" },
+  ];
+}
+
 async function getMission(id: string) {
   try {
     const res = await fetch(`http://127.0.0.1:8000/api/missions/${id}`, {
