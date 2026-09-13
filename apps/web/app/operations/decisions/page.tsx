@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { OperatorNav } from "@/components/OperatorNav";
+import { getApiBaseUrl } from "@/lib/config";
 import { 
   Inbox, 
   AlertTriangle, 
@@ -21,7 +22,8 @@ export default function DecisionsInboxPage() {
   const [resolvedStatus, setResolvedStatus] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/ops/decisions?status=PENDING", {
+    const baseUrl = getApiBaseUrl();
+    fetch(`${baseUrl}/api/ops/decisions?status=PENDING`, {
       headers: { "X-Mock-Role": "operator" }
     })
       .then(res => res.ok ? res.json() : [])
@@ -34,7 +36,8 @@ export default function DecisionsInboxPage() {
 
   const handleResolve = async (id: string, action: "approve" | "reject") => {
     try {
-      await fetch(`http://localhost:8000/api/decisions/${id}/${action}`, {
+      const baseUrl = getApiBaseUrl();
+      await fetch(`${baseUrl}/api/decisions/${id}/${action}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

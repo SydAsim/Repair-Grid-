@@ -24,6 +24,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { getApiBaseUrl } from "@/lib/config";
 
 interface Report {
   report_id: string;
@@ -63,7 +64,8 @@ export default function ResidentHomePage() {
     setLoadingReports(true);
     setReportsError("");
     try {
-      const res = await fetch("http://localhost:8000/api/reports/mine", {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/reports/mine`, {
         headers: getAuthHeaders(),
       });
       if (res.ok) {
@@ -289,6 +291,7 @@ export default function ResidentHomePage() {
                       <input
                         type="text"
                         required
+                        autoComplete="name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="e.g. Alex Mercer"
@@ -307,6 +310,7 @@ export default function ResidentHomePage() {
                     <input
                       type="email"
                       required
+                      autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="resident@repairgrid.demo"
@@ -324,6 +328,7 @@ export default function ResidentHomePage() {
                     <input
                       type={showPassword ? "text" : "password"}
                       required
+                      autoComplete={authMode === "login" ? "current-password" : "new-password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"

@@ -294,6 +294,7 @@ export default function OperationsOverviewPage() {
                       type="text"
                       placeholder="e.g. Jordan Vance"
                       value={authName}
+                      autoComplete="name"
                       onChange={(e) => setAuthName(e.target.value)}
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
                       required
@@ -308,6 +309,7 @@ export default function OperationsOverviewPage() {
                   <Mail className="h-4 w-4 absolute left-3 top-3 text-zinc-500" />
                   <input
                     type="email"
+                    autoComplete="email"
                     placeholder="operator@repairgrid.demo"
                     value={authEmail}
                     onChange={(e) => setAuthEmail(e.target.value)}
@@ -323,6 +325,7 @@ export default function OperationsOverviewPage() {
                   <Lock className="h-4 w-4 absolute left-3 top-3 text-zinc-500" />
                   <input
                     type={showPassword ? "text" : "password"}
+                    autoComplete={authMode === "login" ? "current-password" : "new-password"}
                     placeholder="••••••••"
                     value={authPassword}
                     onChange={(e) => setAuthPassword(e.target.value)}

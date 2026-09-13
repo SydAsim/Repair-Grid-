@@ -272,6 +272,7 @@ export default function WorkerHomePage() {
                       <User className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
                       <input
                         type="text"
+                        autoComplete="name"
                         placeholder="e.g. Ahmed Khan"
                         value={authName}
                         onChange={(e) => setAuthName(e.target.value)}
@@ -303,6 +304,7 @@ export default function WorkerHomePage() {
                   <Mail className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
                   <input
                     type="email"
+                    autoComplete="email"
                     placeholder="technician@repairgrid.demo"
                     value={authEmail}
                     onChange={(e) => setAuthEmail(e.target.value)}
@@ -318,6 +320,7 @@ export default function WorkerHomePage() {
                   <Lock className="h-4 w-4 absolute left-3 top-3 text-slate-500" />
                   <input
                     type={showPassword ? "text" : "password"}
+                    autoComplete={authMode === "login" ? "current-password" : "new-password"}
                     placeholder="••••••••"
                     value={authPassword}
                     onChange={(e) => setAuthPassword(e.target.value)}

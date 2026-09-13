@@ -25,6 +25,7 @@ import {
   Info
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { getApiBaseUrl } from "@/lib/config";
 
 type Category = "streetlights" | "potholes" | "other";
 
@@ -261,7 +262,8 @@ export default function ReportPage() {
     setSubmitError(null);
     try {
       const authHeaders = getAuthHeaders();
-      const res = await fetch("http://localhost:8000/api/reports", {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/reports`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

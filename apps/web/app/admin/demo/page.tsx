@@ -13,6 +13,7 @@ import {
   KeyRound,
   Info
 } from "lucide-react";
+import { getApiBaseUrl } from "@/lib/config";
 
 export default function AdminDemoPage() {
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -22,7 +23,8 @@ export default function AdminDemoPage() {
     setLoading(true);
     setStatusMsg(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/admin/demo/${endpoint}`, {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/admin/demo/${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
