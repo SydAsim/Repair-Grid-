@@ -142,6 +142,7 @@ def get_all_operations_events(current_user: AuthenticatedUser = Depends(require_
     return Database.list_all_events(limit=100)
 
 @router.post("/missions/{mission_id}/verify-close")
+@router.post("/missions/{mission_id}/approve")
 def verify_and_close_mission(
     mission_id: str,
     current_user: AuthenticatedUser = Depends(require_roles(["operator", "admin"]))

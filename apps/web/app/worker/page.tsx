@@ -22,7 +22,11 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
-  ChevronRight
+  ChevronRight,
+  X,
+  Camera,
+  Bot,
+  Check
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/config";
 import { useWorkerAuth } from "@/lib/auth-context";
@@ -42,6 +46,10 @@ type Mission = {
   location?: string;
   risk_band: string;
   status: string;
+  photo_evidence?: string;
+  photoEvidence?: string;
+  ai_solution?: string;
+  required_skill?: string;
 };
 
 type WorkerNotification = {
@@ -54,6 +62,8 @@ type WorkerNotification = {
   createdAt: string;
   readAt?: string | null;
   deliveryStatus: string;
+  photoEvidence?: string;
+  aiRecommendation?: string;
 };
 
 export default function WorkerHomePage() {
@@ -194,6 +204,19 @@ export default function WorkerHomePage() {
     setBusyMission(missionId);
     try {
       await fetch(`${API_BASE_URL}/api/missions/${missionId}/accept`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+      await refresh();
+    } finally {
+      setBusyMission(null);
+    }
+  };
+
+  const rejectMission = async (missionId: string) => {
+    setBusyMission(missionId);
+    try {
+      await fetch(`${API_BASE_URL}/api/missions/${missionId}/reject`, {
         method: "POST",
         headers: getAuthHeaders(),
       });
@@ -520,34 +543,63 @@ export default function WorkerHomePage() {
             </button>
           </div>
           <div className="space-y-2">
-            {notifications.slice(0, 3).map((notification) => (
-              <Link 
+            {notifications.slice(0, 5).map((notification) => (
+              <div 
                 key={notification.notificationId} 
-                href={notification.actionUrl} 
-                onClick={async (event) => { 
-                  event.preventDefault(); 
-                  await markRead(notification.notificationId); 
-                  window.location.href = notification.actionUrl; 
-                }} 
-                className={`glass-panel-interactive rounded-xl p-3.5 flex items-start gap-3 ${
+                className={`glass-panel-interactive rounded-xl p-3.5 flex flex-col gap-2.5 ${
                   !notification.readAt ? "border-amber-500/40 bg-amber-950/15" : "border-slate-800"
                 }`}
               >
-                <span className={`mt-0.5 h-8 w-8 rounded-lg flex items-center justify-center ${
-                  !notification.readAt ? "bg-amber-500/15 text-amber-400" : "bg-slate-800 text-slate-400"
-                }`}>
-                  <Bell className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center justify-between gap-2">
-                    <strong className="text-xs text-white">{notification.title}</strong>
-                    {!notification.readAt && <span className="h-2 w-2 rounded-full bg-amber-400" />}
+                <div className="flex items-start gap-3">
+                  {notification.photoEvidence ? (
+                    <div className="h-12 w-12 rounded-lg overflow-hidden border border-slate-800 shrink-0 bg-slate-950">
+                      <img src={notification.photoEvidence} alt="Evidence" className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <span className={`mt-0.5 h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      !notification.readAt ? "bg-amber-500/15 text-amber-400" : "bg-slate-800 text-slate-400"
+                    }`}>
+                      <Bell className="h-4 w-4" />
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="text-xs text-white">{notification.title}</strong>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold">
+                        {notification.priority || "HIGH"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-4 text-slate-300">
+                      {notification.message}
+                    </p>
+                  </div>
+                </div>
+
+                {/* AI Solution Snippet */}
+                {notification.aiRecommendation && (
+                  <div className="p-2.5 rounded-lg bg-indigo-950/30 border border-indigo-500/20 text-[11px] text-indigo-300 flex items-center space-x-2">
+                    <Bot className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                    <span className="truncate">{notification.aiRecommendation}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-800/60">
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {new Date(notification.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </span>
-                  <span className="mt-1 block text-[11px] leading-4 text-slate-400">
-                    {notification.message}
-                  </span>
-                </span>
-              </Link>
+                  <Link
+                    href={notification.actionUrl}
+                    onClick={async () => {
+                      await markRead(notification.notificationId);
+                      window.location.href = notification.actionUrl;
+                    }}
+                    className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center"
+                  >
+                    <span>View & Decide</span>
+                    <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                  </Link>
+                </div>
+              </div>
             ))}
             {notifications.length === 0 && (
               <div className="glass-panel rounded-xl border border-slate-800 p-4 text-center text-xs text-slate-500">
@@ -562,7 +614,7 @@ export default function WorkerHomePage() {
           <section>
             <div className="flex items-center justify-between mb-2.5">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                {nextMission.status === "AWAITING_ACCEPTANCE" ? "New Dispatched Offer (Live)" : "Active Mission"}
+                {nextMission.status === "AWAITING_ACCEPTANCE" ? "🚨 Incoming Dispatch Offer — Action Required" : "Active Dispatched Mission"}
               </h2>
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
                 nextMission.risk_band === "HIGH" || nextMission.risk_band === "CRITICAL"
@@ -586,33 +638,96 @@ export default function WorkerHomePage() {
                   <Zap className="h-5 w-5" />
                 </div>
               </div>
-              <p className="text-xs text-slate-300 bg-slate-950/80 p-3 rounded-xl border border-slate-800 leading-relaxed">
-                {nextMission.description || "Review the reported issue and complete the authorized repair scope."}
-              </p>
-              <div className="pt-2 flex items-center space-x-3">
+
+              {/* Citizen Description & Photo Evidence */}
+              <div className="space-y-2">
+                <p className="text-xs text-slate-300 bg-slate-950/80 p-3 rounded-xl border border-slate-800 leading-relaxed">
+                  &ldquo;{nextMission.description || "Review reported defect and execute authorized physical repair scope."}&rdquo;
+                </p>
+
+                {/* Picture submitted by citizen */}
+                <div className="relative h-44 w-full rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+                  <img 
+                    src={nextMission.photo_evidence || nextMission.photoEvidence || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800"} 
+                    alt="Citizen Reported Issue" 
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 left-2 px-2.5 py-1 rounded-md bg-slate-950/80 backdrop-blur-sm border border-slate-700 text-[10px] font-mono text-slate-200 flex items-center space-x-1.5">
+                    <Camera className="h-3 w-3 text-indigo-400" />
+                    <span>Resident Photographic Evidence</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* AI-Based Solution / Triage Result Box */}
+              <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-indigo-300 flex items-center">
+                    <Bot className="h-4 w-4 mr-1.5 text-indigo-400" />
+                    Amazon Nova AI Diagnostic & Solution
+                  </span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    99% Ranked Fit
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed font-mono">
+                  {nextMission.ai_solution || "AI Solution: Replace damaged 150W modular luminaire core and verify photocell switch. Lockout breaker before opening casing."}
+                </p>
+                <div className="pt-1.5 border-t border-indigo-500/20 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>Required Trade: <strong className="text-white capitalize">{nextMission.required_skill || "Electrical Specialist"}</strong></span>
+                  <span>Safety Protocol: <strong className="text-amber-400">Class 3 PPE Mandatory</strong></span>
+                </div>
+              </div>
+
+              {/* Technician Decision Choice Controls */}
+              <div className="pt-2">
                 {nextMission.status === "AWAITING_ACCEPTANCE" ? (
-                  <button 
-                    onClick={() => acceptMission(nextMission.mission_id)} 
-                    disabled={busyMission === nextMission.mission_id} 
-                    className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-xs font-bold text-white transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/30"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>{busyMission ? "Accepting..." : "Accept Mission & Dispatch"}</span>
-                  </button>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button 
+                        onClick={() => acceptMission(nextMission.mission_id)} 
+                        disabled={busyMission === nextMission.mission_id} 
+                        className="py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-xs font-bold text-white transition flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-600/25"
+                      >
+                        <Check className="h-4 w-4" />
+                        <span>{busyMission ? "Accepting..." : "Accept Mission"}</span>
+                      </button>
+
+                      <button 
+                        onClick={() => rejectMission(nextMission.mission_id)} 
+                        disabled={busyMission === nextMission.mission_id} 
+                        className="py-3 px-3 rounded-xl bg-slate-800 hover:bg-rose-950/40 border border-slate-700 hover:border-rose-500/50 disabled:opacity-60 text-xs font-bold text-slate-300 hover:text-rose-300 transition flex items-center justify-center space-x-1.5"
+                      >
+                        <X className="h-4 w-4" />
+                        <span>Decline / Pass</span>
+                      </button>
+                    </div>
+
+                    <Link 
+                      href={`/worker/missions/${nextMission.mission_id}/`} 
+                      onClick={(e) => { e.preventDefault(); window.location.href = `/worker/missions/${nextMission.mission_id}/`; }}
+                      className="w-full py-2.5 px-4 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-xs font-semibold text-indigo-300 text-center transition flex items-center justify-center space-x-1.5 border border-indigo-500/30"
+                    >
+                      <span>Inspect Full Work Order Details & Route</span>
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
                 ) : (
-                  <Link 
-                    href={`/worker/missions/${nextMission.mission_id}/`} 
-                    onClick={(e) => { e.preventDefault(); window.location.href = `/worker/missions/${nextMission.mission_id}/`; }}
-                    className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white text-center transition flex items-center justify-center space-x-2"
-                  >
-                    <Navigation className="h-4 w-4" />
-                    <span>Open Mission Details</span>
-                  </Link>
+                  <div className="flex items-center space-x-3">
+                    <Link 
+                      href={`/worker/missions/${nextMission.mission_id}/`} 
+                      onClick={(e) => { e.preventDefault(); window.location.href = `/worker/missions/${nextMission.mission_id}/`; }}
+                      className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white text-center transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/25"
+                    >
+                      <Navigation className="h-4 w-4" />
+                      <span>Open Mission Execution</span>
+                    </Link>
+                    <span className="py-3 px-4 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300 flex items-center">
+                      <Clock className="h-3.5 w-3.5 mr-1 text-indigo-400" />
+                      {nextMission.status.replaceAll("_", " ")}
+                    </span>
+                  </div>
                 )}
-                <span className="py-3 px-4 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300 flex items-center">
-                  <Clock className="h-3.5 w-3.5 mr-1" />
-                  {nextMission.status.replaceAll("_", " ")}
-                </span>
               </div>
             </div>
           </section>

@@ -341,6 +341,61 @@ def reject_mission(
     )
     return {"status": "REJECTED", "missionId": mission_id}
 
+class TechnicianMessagePayload(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
+    eta_minutes: Optional[int] = None
+    voice_note: Optional[str] = None
+
+@missions_router.post("/{mission_id}/message")
+def send_technician_message(
+    mission_id: str,
+    payload: TechnicianMessagePayload,
+    current_user: AuthenticatedUser = Depends(require_roles(["field_worker", "operator", "admin"]))
+):
+    m = Database.get_mission(mission_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    worker = get_my_profile(current_user)
+    worker_id = worker.get("workerId", "wkr_ahmed")
+    worker_name = worker.get("displayName", "Ahmed Khan")
+
+    msg_data = {
+        "technicianId": worker_id,
+        "technicianName": worker_name,
+        "message": payload.message,
+        "etaMinutes": payload.eta_minutes,
+        "voiceNote": payload.voice_note,
+        "timestamp": Database.now_iso()
+    }
+
+    m["latestTechnicianMessage"] = msg_data
+    Database.save_mission(m)
+
+    Database.record_event(
+        mission_id=mission_id,
+        event_type="TECHNICIAN_MESSAGE",
+        actor_type="WORKER",
+        actor_id=worker_id,
+        payload=msg_data
+    )
+
+    for rep_id in m.get("reportIds", [m.get("reportId")]):
+        if rep_id:
+            rep = Database.get_report(rep_id)
+            if rep:
+                rep["latestTechnicianMessage"] = msg_data
+                Database.save_report(rep)
+            Database.record_event(
+                mission_id=rep_id,
+                event_type="TECHNICIAN_MESSAGE",
+                actor_type="WORKER",
+                actor_id=worker_id,
+                payload=msg_data
+            )
+
+    return {"status": "sent", "missionId": mission_id, "message": payload.message}
+
 @missions_router.post("/{mission_id}/en-route")
 def set_mission_en_route(
     mission_id: str,
@@ -490,6 +545,23 @@ def submit_mission_completion(
         payload=proof
     )
 
+    for rep_id in m.get("reportIds", [m.get("reportId")]):
+        if rep_id:
+            rep = Database.get_report(rep_id)
+            if rep:
+                rep["status"] = "PROOF_SUBMITTED"
+                rep["proofPhoto"] = payload.after_photo_ref
+                rep["afterPhoto"] = payload.after_photo_ref
+                rep["technicianNotes"] = payload.notes
+                Database.save_report(rep)
+            Database.record_event(
+                mission_id=rep_id,
+                event_type="PROOF_SUBMITTED",
+                actor_type="WORKER",
+                actor_id=worker_id,
+                payload=proof
+            )
+
     # Autonomous AI Verification with Nova Vision / CompletionVerifierAgent
     try:
         category = m.get("category", "streetlights")
@@ -548,6 +620,12 @@ def submit_mission_completion(
         if verification_result["recommendation"] == "CLOSE":
             m["status"] = MissionStatus.VERIFIED.value
             m["verificationStatus"] = "VERIFIED"
+            for rep_id in m.get("reportIds", [m.get("reportId")]):
+                if rep_id:
+                    rep = Database.get_report(rep_id)
+                    if rep:
+                        rep["status"] = "VERIFIED"
+                        Database.save_report(rep)
             Database.record_event(
                 mission_id=mission_id,
                 event_type="AI_VERIFICATION_PASSED" if verification_result["verificationMode"] == "AMAZON_BEDROCK" else "LOCAL_POLICY_VERIFICATION_PASSED",

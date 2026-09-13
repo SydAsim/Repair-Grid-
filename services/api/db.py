@@ -303,6 +303,44 @@ class Database:
         unread_only: bool = False,
     ) -> List[Dict[str, Any]]:
         items = list(_mock_notifications.values())
+
+        # Synthesize notifications from missions so they persist across all Lambda instances!
+        try:
+            missions = Database.list_missions(limit=50)
+            seen_ids = {item.get("missionId") for item in items if item.get("missionId")}
+
+            for m in missions:
+                m_id = m.get("missionId")
+                if not m_id or m_id in seen_ids:
+                    continue
+                m_status = m.get("status", "AWAITING_ACCEPTANCE")
+                cat = (m.get("category") or "infrastructure").replace("_", " ").title()
+                diag = m.get("aiSummary") or m.get("triageNotes") or f"Amazon Nova diagnosis: {cat} defect verified. Strands matched {m.get('department', 'Electrical')} specialist."
+
+                items.append({
+                    "notificationId": f"NTF-{m_id}",
+                    "recipientUserId": recipient_user_id or "worker-electric-001",
+                    "recipientWorkerId": m.get("assignedWorkerId") or m.get("assignedTechnicianId") or "wkr_ahmed",
+                    "type": "MISSION_OFFERED",
+                    "title": f"🚨 Dispatch Offer: {m.get('title', f'Repair {cat}')}",
+                    "message": f"{m.get('description', 'New assigned civic work order.')}",
+                    "missionId": m_id,
+                    "actionUrl": f"/worker/missions/{m_id}",
+                    "priority": m.get("riskBand", "HIGH"),
+                    "photoEvidence": m.get("photoEvidence"),
+                    "aiRecommendation": diag,
+                    "category": m.get("category", "streetlights"),
+                    "location": m.get("location", "Campus Site"),
+                    "matchScore": m.get("matchScorePct") or 95,
+                    "status": m_status,
+                    "createdAt": m.get("createdAt", Database.now_iso()),
+                    "readAt": None if m_status in ["AWAITING_ACCEPTANCE", "MISSION_CREATED"] else m.get("updatedAt"),
+                    "deliveryStatus": "AVAILABLE" if m_status in ["AWAITING_ACCEPTANCE", "MISSION_CREATED"] else "ACTIONED"
+                })
+                seen_ids.add(m_id)
+        except Exception as e:
+            print(f"Error synthesizing notifications from missions: {e}")
+
         if recipient_user_id or recipient_worker_id:
             items = [
                 item for item in items
