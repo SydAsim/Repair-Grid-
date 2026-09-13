@@ -59,7 +59,11 @@ export default function MissionsListPage() {
 
   useEffect(() => {
     fetchMissions();
-    const timer = setInterval(fetchMissions, 4000);
+    const timer = setInterval(() => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") {
+        fetchMissions();
+      }
+    }, 8000);
     return () => clearInterval(timer);
   }, [fetchMissions]);
 

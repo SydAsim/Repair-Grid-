@@ -156,12 +156,24 @@ export default function ReportPage() {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      const maxDim = 1024;
+      let w = video.videoWidth || 640;
+      let h = video.videoHeight || 480;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+      }
+      canvas.width = w;
+      canvas.height = h;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        ctx.drawImage(video, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
         setPhotoDataUrl(dataUrl);
         stopCamera();
         setPhotoMode("choose");
@@ -174,8 +186,39 @@ export default function ReportPage() {
     if (file) {
       const reader = new FileReader();
       reader.onload = () => {
-        setPhotoDataUrl(reader.result as string);
-        setPhotoMode("choose");
+        const rawResult = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const maxDim = 1024;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+            setPhotoDataUrl(dataUrl);
+          } else {
+            setPhotoDataUrl(rawResult);
+          }
+          setPhotoMode("choose");
+        };
+        img.onerror = () => {
+          setPhotoDataUrl(rawResult);
+          setPhotoMode("choose");
+        };
+        img.src = rawResult;
       };
       reader.readAsDataURL(file);
     }
@@ -281,6 +324,9 @@ export default function ReportPage() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        if (res.status === 503) {
+          throw new Error("The autonomous dispatch network is briefly scaling up. Please try submitting again.");
+        }
         throw new Error(errData.detail || "Failed to submit report to Strands Agent Graph.");
       }
 

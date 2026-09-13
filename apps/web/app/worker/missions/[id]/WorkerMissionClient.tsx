@@ -189,7 +189,11 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
 
   useEffect(() => {
     fetchMission();
-    const timer = setInterval(fetchMission, 3000);
+    const timer = setInterval(() => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") {
+        fetchMission();
+      }
+    }, 8000);
     return () => clearInterval(timer);
   }, [missionId]);
 

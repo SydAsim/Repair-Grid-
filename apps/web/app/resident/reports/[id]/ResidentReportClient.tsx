@@ -132,7 +132,11 @@ export default function ResidentReportClient({ id }: { id: string }) {
 
   useEffect(() => {
     loadReportAndEvents();
-    const interval = setInterval(loadReportAndEvents, 3500);
+    const interval = setInterval(() => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") {
+        loadReportAndEvents();
+      }
+    }, 8000);
     return () => clearInterval(interval);
   }, [reportId]);
 

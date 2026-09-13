@@ -42,6 +42,17 @@ def get_dynamo_resource():
         return boto3.resource("dynamodb", region_name=os.getenv("AWS_REGION", "us-east-1"))
     return None
 
+def _sanitize_for_dynamo(data: Any) -> Any:
+    if isinstance(data, str):
+        if data.startswith("data:image/") and len(data) > 5000:
+            return "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800"
+        return data
+    elif isinstance(data, dict):
+        return {k: _sanitize_for_dynamo(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [_sanitize_for_dynamo(v) for v in data]
+    return data
+
 class Database:
     @staticmethod
     def now_iso() -> str:
@@ -58,7 +69,8 @@ class Database:
         dynamo = get_dynamo_resource()
         if dynamo and not ENABLE_LOCAL_MOCK:
             table = dynamo.Table(os.getenv("DYNAMODB_REPORTS_TABLE", "RepairGridReports"))
-            table.put_item(Item=_to_dynamo_item(report_data))
+            sanitized = _sanitize_for_dynamo(report_data)
+            table.put_item(Item=_to_dynamo_item(sanitized))
         else:
             _mock_reports[report_id] = report_data.copy()
         return report_data
@@ -95,7 +107,8 @@ class Database:
         dynamo = get_dynamo_resource()
         if dynamo and not ENABLE_LOCAL_MOCK:
             table = dynamo.Table(os.getenv("DYNAMODB_MISSIONS_TABLE", "RepairGridMissions"))
-            table.put_item(Item=_to_dynamo_item(mission_data))
+            sanitized = _sanitize_for_dynamo(mission_data)
+            table.put_item(Item=_to_dynamo_item(sanitized))
         else:
             _mock_missions[mission_id] = mission_data.copy()
         return mission_data

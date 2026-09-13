@@ -144,7 +144,11 @@ export default function OperationsOverviewPage() {
   useEffect(() => {
     if (user) {
       refresh().catch(() => setLoading(false));
-      const timer = window.setInterval(() => refresh().catch(() => undefined), 3000);
+      const timer = window.setInterval(() => {
+        if (typeof document === "undefined" || document.visibilityState === "visible") {
+          refresh().catch(() => undefined);
+        }
+      }, 8000);
       return () => window.clearInterval(timer);
     }
   }, [user, refresh]);

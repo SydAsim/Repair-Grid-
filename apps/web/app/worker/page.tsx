@@ -111,7 +111,11 @@ export default function WorkerHomePage() {
   useEffect(() => {
     if (user) {
       refresh().catch(() => undefined);
-      const timer = window.setInterval(() => refresh().catch(() => undefined), 2000);
+      const timer = window.setInterval(() => {
+        if (typeof document === "undefined" || document.visibilityState === "visible") {
+          refresh().catch(() => undefined);
+        }
+      }, 8000);
       return () => window.clearInterval(timer);
     }
   }, [user, refresh]);

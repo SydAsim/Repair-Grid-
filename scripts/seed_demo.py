@@ -4,7 +4,7 @@ import sys
 # Add project root to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from services.api.db import Database
+from services.api.db import Database, ENABLE_LOCAL_MOCK
 
 CAMPUS_ASSETS = [
     # Streetlights (Lighting)
@@ -98,7 +98,12 @@ CAMPUS_WORKERS = [
     },
 ]
 
-def seed_campus_district() -> int:
+def seed_campus_district(force: bool = False) -> int:
+    if not force and not ENABLE_LOCAL_MOCK:
+        existing = Database.get_report("RG-R-101")
+        if existing:
+            return 0
+
     # 1. Seed workers
     for w in CAMPUS_WORKERS:
         Database.save_worker(w)

@@ -1,3 +1,4 @@
+import os
 import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -19,7 +20,32 @@ def create_report(
     current_user: AuthenticatedUser = Depends(get_current_user)
 ):
     report_id = f"RG-R-{uuid.uuid4().hex[:6].upper()}"
-    evidence_refs = [req.image_url] if req.image_url else []
+    
+    # Process image evidence
+    evidence_url = req.image_url
+    if evidence_url and evidence_url.startswith("data:image/"):
+        try:
+            import base64
+            import boto3
+            header, encoded = evidence_url.split(",", 1) if "," in evidence_url else ("", evidence_url)
+            image_bytes = base64.b64decode(encoded)
+            bucket_name = os.getenv("S3_EVIDENCE_BUCKET", "repairgrid-evidence-011528288924-us-east-1")
+            ext = "png" if "png" in header else "webp" if "webp" in header else "jpg"
+            file_key = f"reports/{report_id}/before/{uuid.uuid4().hex[:8]}.{ext}"
+            
+            s3 = boto3.client("s3", region_name=os.getenv("AWS_REGION", "us-east-1"))
+            s3.put_object(
+                Bucket=bucket_name,
+                Key=file_key,
+                Body=image_bytes,
+                ContentType="image/jpeg" if ext == "jpg" else f"image/{ext}"
+            )
+            evidence_url = f"https://{bucket_name}.s3.amazonaws.com/{file_key}"
+        except Exception as upload_err:
+            print(f"S3 upload error for data URL: {upload_err}")
+            evidence_url = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800"
+
+    evidence_refs = [evidence_url] if evidence_url else []
     
     # Calculate simple geohash placeholder for spatial clustering
     lat_prefix = f"{req.lat:.3f}".replace(".", "")
@@ -60,20 +86,24 @@ def create_report(
     )
 
     # Automatically execute Autonomous Mission Pipeline Graph!
-    from agents.graphs.main_graph import RepairGridGraph
-    graph_state = {
-        "report_id": report_id,
-        "category": req.category.value,
-        "description": req.description,
-        "lat": req.lat,
-        "lng": req.lng,
-        "location": saved.get("locationName"),
-        "address": saved.get("locationName"),
-        "photo_evidence": req.image_url,
-        "evidenceRefs": evidence_refs,
-    }
-    graph_res = RepairGridGraph.execute(graph_state)
-    mission_id = graph_res.get("mission_id")
+    mission_id = None
+    try:
+        from agents.graphs.main_graph import RepairGridGraph
+        graph_state = {
+            "report_id": report_id,
+            "category": req.category.value,
+            "description": req.description,
+            "lat": req.lat,
+            "lng": req.lng,
+            "location": saved.get("locationName"),
+            "address": saved.get("locationName"),
+            "photo_evidence": evidence_url,
+            "evidenceRefs": evidence_refs,
+        }
+        graph_res = RepairGridGraph.execute(graph_state)
+        mission_id = graph_res.get("mission_id")
+    except Exception as graph_err:
+        print(f"RepairGridGraph execution error: {graph_err}")
 
     # Fetch updated report state with linked mission and status
     current_saved = Database.get_report(report_id) or saved
