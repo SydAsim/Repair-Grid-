@@ -45,14 +45,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
+      const defaultWorker: UserProfile = {
+        userId: "worker-electric-001",
+        name: "Ahmed Khan",
+        email: "worker.electric@repairgrid.demo",
+        role: "field_worker",
+        department: "electrical",
+      };
+
+      const defaultResident: UserProfile = {
+        userId: "resident-asim-001",
+        name: "Asim Syed",
+        email: "resident@repairgrid.demo",
+        role: "resident",
+      };
+
+      const defaultOperator: UserProfile = {
+        userId: "operator-demo-001",
+        name: "Elena Rostova",
+        email: "operator@repairgrid.demo",
+        role: "operator",
+      };
+
       const storedRes = localStorage.getItem(STORAGE_KEY_RESIDENT);
-      if (storedRes) setResidentUser(JSON.parse(storedRes));
+      setResidentUser(storedRes ? JSON.parse(storedRes) : defaultResident);
 
       const storedWkr = localStorage.getItem(STORAGE_KEY_WORKER);
-      if (storedWkr) setWorkerUser(JSON.parse(storedWkr));
+      setWorkerUser(storedWkr ? JSON.parse(storedWkr) : defaultWorker);
 
       const storedOps = localStorage.getItem(STORAGE_KEY_OPERATOR);
-      if (storedOps) setOperatorUser(JSON.parse(storedOps));
+      setOperatorUser(storedOps ? JSON.parse(storedOps) : defaultOperator);
     } catch (e) {
       console.error("Failed to load users from localStorage", e);
     } finally {

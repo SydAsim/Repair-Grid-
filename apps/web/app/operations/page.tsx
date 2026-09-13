@@ -505,7 +505,8 @@ export default function OperationsOverviewPage() {
                       </td>
                       <td className="px-4 py-4 text-right">
                         <Link 
-                          href={`/operations/missions/${mission.missionId}`} 
+                          href={`/operations/missions/${mission.missionId}/`} 
+                          onClick={(e) => { e.preventDefault(); window.location.href = `/operations/missions/${mission.missionId}/`; }}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-800 hover:text-white"
                         >
                           <ChevronRight className="h-4 w-4" />
@@ -548,7 +549,8 @@ export default function OperationsOverviewPage() {
                 {attention.slice(0, 4).map((mission) => (
                   <Link 
                     key={mission.missionId} 
-                    href={`/operations/missions/${mission.missionId}`} 
+                    href={`/operations/missions/${mission.missionId}/`} 
+                    onClick={(e) => { e.preventDefault(); window.location.href = `/operations/missions/${mission.missionId}/`; }}
                     className="flex items-start gap-3 rounded-md border border-transparent p-3 transition hover:border-zinc-800 hover:bg-zinc-950/60"
                   >
                     <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/10 text-amber-400">

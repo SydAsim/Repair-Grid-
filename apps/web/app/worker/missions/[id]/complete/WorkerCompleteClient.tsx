@@ -17,12 +17,30 @@ import { Textarea } from "@/components/ui/textarea";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { MissionLifecycleStepper } from "@/components/MissionLifecycleStepper";
 import { ImageCaptureUpload } from "@/components/ImageCaptureUpload";
-import { API_BASE_URL } from "@/lib/config";
+import { API_BASE_URL, getApiBaseUrl } from "@/lib/config";
 
 type Outcome = "REPAIRED" | "TEMPORARY_REPAIR" | "REQUIRES_SPECIALIST" | "INACCESSIBLE" | "UNABLE_TO_RESOLVE" | "NO_ISSUE_FOUND";
 
 export default function WorkerCompleteClient({ id }: { id: string }) {
   const router = useRouter();
+
+  const [missionId, setMissionId] = useState<string>(() => {
+    if (id && id !== "default") return id;
+    if (typeof window !== "undefined") {
+      const searchParam = new URLSearchParams(window.location.search).get("id");
+      if (searchParam) return searchParam;
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      const completeIdx = parts.indexOf("complete");
+      if (completeIdx > 0) {
+        const candidate = parts[completeIdx - 1];
+        if (candidate && candidate !== "default" && candidate !== "missions") return candidate;
+      }
+      const lastPart = parts[parts.length - 1];
+      if (lastPart && lastPart !== "default" && lastPart !== "complete" && lastPart !== "missions") return lastPart;
+    }
+    return id || "default";
+  });
+
   const [outcome, setOutcome] = useState<Outcome>("REPAIRED");
   const [notes, setNotes] = useState("Replaced failed LED module. Light tested successfully.");
   const [afterPhotoUrl, setAfterPhotoUrl] = useState<string | null>(
@@ -33,9 +51,11 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    const baseUrl = getApiBaseUrl();
     const photoPayload = afterPhotoUrl || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800";
+    const targetId = missionId && missionId !== "default" ? missionId : (id && id !== "default" ? id : "RG-M-DE042E");
     try {
-      const res = await fetch(`${API_BASE_URL}/api/missions/${id}/completion`, {
+      const res = await fetch(`${baseUrl}/api/missions/${targetId}/completion`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -69,7 +89,7 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
     <div className="min-h-screen bg-slate-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 flex flex-col selection:bg-zinc-200 dark:selection:bg-zinc-800 transition-colors">
       <header className="border-b border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-xl px-4 sm:px-6 h-14 sticky top-0 z-40 flex items-center justify-between transition-colors">
         <Link 
-          href={`/worker/missions/${id}`} 
+          href={`/worker/missions/${missionId}`} 
           className="inline-flex items-center text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5 mr-1 text-zinc-400 dark:text-zinc-500" />
@@ -104,7 +124,7 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
                 {submittedStatus.status === "VERIFIED" ? "Evidence review passed" : "Proof submitted for review"}
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 font-mono">
-                Mission {id} • Status: {submittedStatus.status}
+                Mission {missionId} • Status: {submittedStatus.status}
               </p>
             </div>
 
@@ -126,7 +146,7 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
                   Back to Field Shift
                 </Button>
               </Link>
-              <Link href={`/worker/missions/${id}`} className="flex-1">
+              <Link href={`/worker/missions/${missionId}`} className="flex-1">
                 <Button variant="outline" size="sm" className="w-full text-xs border-zinc-300 dark:border-zinc-800">
                   Mission Audit
                 </Button>

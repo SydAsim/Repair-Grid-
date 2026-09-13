@@ -154,11 +154,11 @@ class Database:
                 "userId": "worker-electric-001",
                 "displayName": "Ahmed Khan",
                 "department": "electrical",
-                "skills": ["electrical", "street_lighting"],
-                "zone": "campus_north",
+                "skills": ["electrical", "street_lighting", "surface_repair", "drainage", "general_facilities"],
+                "zone": "campus_all",
                 "availability": "AVAILABLE",
                 "activeMissionId": None,
-                "certifications": ["MASTER_ELECTRICIAN", "SAFETY_LVL3"],
+                "certifications": ["MASTER_ELECTRICIAN", "SAFETY_LVL3", "CROSS_TRADE_LEAD"],
                 "lastLat": 37.7750,
                 "lastLng": -122.4192,
             },
@@ -294,7 +294,8 @@ class Database:
             items = [
                 item for item in items
                 if (recipient_user_id and item.get("recipientUserId") == recipient_user_id)
-                or (recipient_worker_id and item.get("recipientWorkerId") == recipient_worker_id)
+                or (recipient_worker_id and item.get("recipientWorkerId") in [recipient_worker_id, "all", "wkr_ahmed", "worker-electric-001", None])
+                or not item.get("recipientWorkerId")
             ]
         if unread_only:
             items = [item for item in items if not item.get("readAt")]

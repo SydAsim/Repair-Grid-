@@ -16,15 +16,30 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { MissionLifecycleStepper } from "@/components/MissionLifecycleStepper";
-import { API_BASE_URL } from "@/lib/config";
+import { API_BASE_URL, getApiBaseUrl } from "@/lib/config";
 
 export default function ResidentVerifyClient({ id }: { id: string }) {
   const router = useRouter();
+
+  const [reportId, setReportId] = useState<string>(() => {
+    if (id && id !== "default") return id;
+    if (typeof window !== "undefined") {
+      const searchParam = new URLSearchParams(window.location.search).get("id");
+      if (searchParam) return searchParam;
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      if (lastPart && lastPart !== "default" && lastPart !== "verify") return lastPart;
+    }
+    return id || "default";
+  });
+
   const [submitted, setSubmitted] = useState<string | null>(null);
 
   const handleFeedback = async (type: "FIXED" | "STILL_BROKEN" | "UNVERIFIABLE") => {
+    const baseUrl = getApiBaseUrl();
+    const targetId = reportId && reportId !== "default" ? reportId : (id && id !== "default" ? id : "RG-R-101");
     try {
-      await fetch(`${API_BASE_URL}/api/reports/${id}/resolution-feedback`, {
+      await fetch(`${baseUrl}/api/reports/${targetId}/resolution-feedback`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

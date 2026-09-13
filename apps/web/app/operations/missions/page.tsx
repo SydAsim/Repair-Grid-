@@ -190,7 +190,8 @@ export default function MissionsListPage() {
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <Link
-                          href={`/operations/missions/${m.missionId}`}
+                          href={`/operations/missions/${m.missionId}/`}
+                          onClick={(e) => { e.preventDefault(); window.location.href = `/operations/missions/${m.missionId}/`; }}
                           className="inline-flex items-center space-x-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300"
                         >
                           <span>Inspect</span>

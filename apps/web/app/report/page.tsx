@@ -285,7 +285,7 @@ export default function ReportPage() {
       }
 
       const data = await res.json();
-      router.push(`/resident/reports/${data.report_id}`);
+      window.location.href = `/resident/reports/${data.report_id}/`;
     } catch (err: any) {
       console.warn("Submission error:", err);
       setSubmitError(err.message || "Could not submit report. Please check if backend is online.");

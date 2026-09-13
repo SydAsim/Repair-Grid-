@@ -541,7 +541,8 @@ export default function WorkerHomePage() {
                   </button>
                 ) : (
                   <Link 
-                    href={`/worker/missions/${nextMission.mission_id}`} 
+                    href={`/worker/missions/${nextMission.mission_id}/`} 
+                    onClick={(e) => { e.preventDefault(); window.location.href = `/worker/missions/${nextMission.mission_id}/`; }}
                     className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white text-center transition flex items-center justify-center space-x-2"
                   >
                     <Navigation className="h-4 w-4" />
@@ -577,7 +578,8 @@ export default function WorkerHomePage() {
               {orderedMissions.slice(1).map((mission) => (
                 <Link 
                   key={mission.mission_id} 
-                  href={`/worker/missions/${mission.mission_id}`} 
+                  href={`/worker/missions/${mission.mission_id}/`} 
+                  onClick={(e) => { e.preventDefault(); window.location.href = `/worker/missions/${mission.mission_id}/`; }}
                   className="glass-panel-interactive rounded-xl p-3.5 flex items-center justify-between border border-slate-800"
                 >
                   <div>

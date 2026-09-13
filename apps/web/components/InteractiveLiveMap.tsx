@@ -713,9 +713,15 @@ export function InteractiveLiveMap({
               <Link
                 href={
                   mode === "worker"
-                    ? `/worker/missions/${selectedIncident.id}`
+                    ? `/worker/missions/${selectedIncident.id}/`
                     : `/operations/missions`
                 }
+                onClick={(e) => {
+                  if (mode === "worker") {
+                    e.preventDefault();
+                    window.location.href = `/worker/missions/${selectedIncident.id}/`;
+                  }
+                }}
                 className="flex-1"
               >
                 <Button size="sm" className="w-full text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">

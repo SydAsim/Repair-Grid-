@@ -22,7 +22,7 @@ import {
   UserCheck
 } from "lucide-react";
 import { MissionLifecycleStepper, StageId } from "@/components/MissionLifecycleStepper";
-import { API_BASE_URL } from "@/lib/config";
+import { API_BASE_URL, getApiBaseUrl } from "@/lib/config";
 import { useWorkerAuth } from "@/lib/auth-context";
 
 interface WorkerMissionClientProps {
@@ -33,13 +33,63 @@ interface WorkerMissionClientProps {
 export default function WorkerMissionClient({ id, initialMission }: WorkerMissionClientProps) {
   const router = useRouter();
   const { getAuthHeaders } = useWorkerAuth();
+
+  const [missionId, setMissionId] = useState<string>(() => {
+    if (id && id !== "default") return id;
+    if (typeof window !== "undefined") {
+      const searchParam = new URLSearchParams(window.location.search).get("id");
+      if (searchParam) return searchParam;
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      // ["worker", "missions", "RG-M-XXXX"]
+      const lastPart = parts[parts.length - 1];
+      if (lastPart && lastPart !== "default" && lastPart !== "missions") return lastPart;
+    }
+    return id || "default";
+  });
+
   const [mission, setMission] = useState<any>(initialMission || null);
   const [loading, setLoading] = useState(!initialMission);
   const [actionLoading, setActionLoading] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParam = new URLSearchParams(window.location.search).get("id");
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      const resolved = searchParam || (lastPart && lastPart !== "default" && lastPart !== "missions" ? lastPart : id);
+      if (resolved && resolved !== "default" && resolved !== missionId) {
+        setMissionId(resolved);
+      }
+    }
+  }, [id, missionId]);
+
   const fetchMission = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/missions/${id}`, {
+      const baseUrl = getApiBaseUrl();
+      let targetId = missionId && missionId !== "default" ? missionId : (id && id !== "default" ? id : null);
+
+      if (!targetId) {
+        try {
+          const listRes = await fetch(`${baseUrl}/api/missions/assigned`, {
+            headers: getAuthHeaders(),
+            cache: "no-store"
+          });
+          if (listRes.ok) {
+            const list = await listRes.json();
+            if (Array.isArray(list) && list.length > 0) {
+              const foundId = list[0].mission_id || list[0].missionId;
+              if (foundId && typeof foundId === "string") {
+                targetId = foundId;
+                setMissionId(foundId);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!targetId) targetId = "RG-M-DE042E";
+
+      const res = await fetch(`${baseUrl}/api/missions/${targetId}`, {
         headers: getAuthHeaders(),
         cache: "no-store"
       });
@@ -59,7 +109,7 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
     // Poll every 3 seconds for real-time mission state changes
     const timer = setInterval(fetchMission, 3000);
     return () => clearInterval(timer);
-  }, [id]);
+  }, [missionId]);
 
   const mapStageToStepper = (status?: string): StageId => {
     if (!status) return "submitted";
@@ -95,7 +145,8 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
   const handleAction = async (action: "accept" | "en-route" | "on-site" | "start") => {
     setActionLoading(true);
     try {
-      await fetch(`${API_BASE_URL}/api/missions/${id}/${action}`, {
+      const baseUrl = getApiBaseUrl();
+      await fetch(`${baseUrl}/api/missions/${missionId}/${action}`, {
         method: "POST",
         headers: getAuthHeaders()
       });
@@ -136,7 +187,7 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
         </Link>
         <div className="flex items-center space-x-2">
           <span className="font-mono text-xs font-bold text-amber-400 uppercase tracking-wider">
-            MISSION {id}
+            MISSION {missionId}
           </span>
           <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
         </div>
@@ -330,7 +381,7 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
           {(mission?.status === "REPAIR_IN_PROGRESS" || mission?.status === "IN_PROGRESS") && (
             <button
               type="button"
-              onClick={() => router.push(`/worker/missions/${id}/complete`)}
+              onClick={() => { window.location.href = `/worker/missions/${missionId}/complete/`; }}
               className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/30"
             >
               <CheckCircle2 className="h-4 w-4" />

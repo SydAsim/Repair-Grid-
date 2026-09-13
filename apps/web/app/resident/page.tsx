@@ -471,7 +471,8 @@ export default function ResidentHomePage() {
                   {reports.map((report) => (
                     <Link
                       key={report.report_id}
-                      href={`/resident/reports/${report.report_id}`}
+                      href={`/resident/reports/${report.report_id}/`}
+                      onClick={(e) => { e.preventDefault(); window.location.href = `/resident/reports/${report.report_id}/`; }}
                       className="glass-panel rounded-xl p-4 flex items-center justify-between block hover:border-indigo-500/40 hover:bg-slate-900/90 transition group"
                     >
                       <div className="flex items-center space-x-3.5">

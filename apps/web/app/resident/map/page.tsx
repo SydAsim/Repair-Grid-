@@ -149,8 +149,9 @@ export default function ResidentMapPage() {
             </div>
 
             <Link
-              href={`/resident/reports/${selectedIssue.id}`}
-              className="mt-6 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white text-center transition"
+              href={`/resident/reports/${selectedIssue.id}/`}
+              onClick={(e) => { e.preventDefault(); window.location.href = `/resident/reports/${selectedIssue.id}/`; }}
+              className="mt-6 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white text-center transition block"
             >
               View Public Timeline
             </Link>

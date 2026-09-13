@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MissionLifecycleStepper, LifecycleStage } from "@/components/MissionLifecycleStepper";
 import { MissionAgentTraceInspector } from "@/components/MissionAgentTraceInspector";
-import { API_BASE_URL } from "@/lib/config";
+import { API_BASE_URL, getApiBaseUrl } from "@/lib/config";
 
 interface MissionDetailClientProps {
   id: string;
@@ -68,21 +68,71 @@ function mapStatusToStage(status?: string): LifecycleStage {
 }
 
 export default function MissionDetailClient({ id }: MissionDetailClientProps) {
+  const [missionId, setMissionId] = useState<string>(() => {
+    if (id && id !== "default") return id;
+    if (typeof window !== "undefined") {
+      const searchParam = new URLSearchParams(window.location.search).get("id");
+      if (searchParam) return searchParam;
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      if (lastPart && lastPart !== "default" && lastPart !== "missions") return lastPart;
+    }
+    return id || "default";
+  });
+
   const [mission, setMission] = useState<any>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
   const [closeSuccess, setCloseSuccess] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParam = new URLSearchParams(window.location.search).get("id");
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      const resolved = searchParam || (lastPart && lastPart !== "default" && lastPart !== "missions" ? lastPart : id);
+      if (resolved && resolved !== "default" && resolved !== missionId) {
+        setMissionId(resolved);
+      }
+    }
+  }, [id, missionId]);
+
   const fetchMissionData = async () => {
     setIsLoading(true);
     try {
+      const baseUrl = getApiBaseUrl();
+      let targetId = missionId && missionId !== "default" ? missionId : (id && id !== "default" ? id : null);
+
+      if (!targetId) {
+        try {
+          const listRes = await fetch(`${baseUrl}/api/ops/missions`, {
+            headers: { "X-Mock-Role": "operator" },
+            cache: "no-store"
+          });
+          if (listRes.ok) {
+            const list = await listRes.json();
+            if (Array.isArray(list) && list.length > 0) {
+              const foundId = list[0].mission_id || list[0].missionId;
+              if (foundId && typeof foundId === "string") {
+                targetId = foundId;
+                setMissionId(foundId);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!targetId) targetId = "RG-2841";
+
       const [resMission, resEvents] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/ops/missions/${id}`, {
-          headers: { "X-Mock-Role": "operator" }
+        fetch(`${baseUrl}/api/ops/missions/${targetId}`, {
+          headers: { "X-Mock-Role": "operator" },
+          cache: "no-store"
         }),
-        fetch(`${API_BASE_URL}/api/ops/missions/${id}/events`, {
-          headers: { "X-Mock-Role": "operator" }
+        fetch(`${baseUrl}/api/ops/missions/${targetId}/events`, {
+          headers: { "X-Mock-Role": "operator" },
+          cache: "no-store"
         })
       ]);
 
@@ -103,12 +153,14 @@ export default function MissionDetailClient({ id }: MissionDetailClientProps) {
 
   useEffect(() => {
     fetchMissionData();
-  }, [id]);
+  }, [missionId]);
 
   const handleVerifyAndClose = async () => {
     setIsClosing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/ops/missions/${id}/verify-close`, {
+      const baseUrl = getApiBaseUrl();
+      const targetId = missionId && missionId !== "default" ? missionId : id;
+      const res = await fetch(`${baseUrl}/api/ops/missions/${targetId}/verify-close`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -146,7 +198,7 @@ export default function MissionDetailClient({ id }: MissionDetailClientProps) {
           <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto" />
           <h2 className="text-xl font-bold">Mission Not Found</h2>
           <p className="text-xs text-zinc-500 max-w-md mx-auto">
-            No mission record matching identifier <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded">{id}</code> exists in the active database.
+            No mission record matching identifier <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded">{missionId}</code> exists in the active database.
           </p>
           <Link href="/operations/missions">
             <Button size="sm" variant="outline" className="text-xs mt-2">

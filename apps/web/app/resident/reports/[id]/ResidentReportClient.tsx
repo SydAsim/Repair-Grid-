@@ -14,7 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { MissionLifecycleStepper, StageId } from "@/components/MissionLifecycleStepper";
-import { API_BASE_URL } from "@/lib/config";
+import { API_BASE_URL, getApiBaseUrl } from "@/lib/config";
 
 interface ReportData {
   report_id: string;
@@ -29,25 +29,75 @@ interface ReportData {
 }
 
 export default function ResidentReportClient({ id }: { id: string }) {
+  const [reportId, setReportId] = useState<string>(() => {
+    if (id && id !== "default") return id;
+    if (typeof window !== "undefined") {
+      const searchParam = new URLSearchParams(window.location.search).get("id");
+      if (searchParam) return searchParam;
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      if (lastPart && lastPart !== "default" && lastPart !== "reports") return lastPart;
+    }
+    return id || "default";
+  });
+
   const [report, setReport] = useState<ReportData | null>(null);
   const [mission, setMission] = useState<any | null>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParam = new URLSearchParams(window.location.search).get("id");
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      const resolved = searchParam || (lastPart && lastPart !== "default" && lastPart !== "reports" ? lastPart : id);
+      if (resolved && resolved !== "default" && resolved !== reportId) {
+        setReportId(resolved);
+      }
+    }
+  }, [id, reportId]);
+
   const loadReportAndEvents = async () => {
     try {
+      const baseUrl = getApiBaseUrl();
+      let targetId = reportId && reportId !== "default" ? reportId : (id && id !== "default" ? id : null);
+
+      if (!targetId) {
+        try {
+          const listRes = await fetch(`${baseUrl}/api/reports`, {
+            headers: { "X-Mock-Role": "resident" },
+            cache: "no-store"
+          });
+          if (listRes.ok) {
+            const list = await listRes.json();
+            if (Array.isArray(list) && list.length > 0) {
+              const foundId = list[0].report_id || list[0].reportId;
+              if (foundId && typeof foundId === "string") {
+                targetId = foundId;
+                setReportId(foundId);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!targetId) targetId = "RG-R-101";
+
       const [resRep, resEvt] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/reports/${id}`, {
+        fetch(`${baseUrl}/api/reports/${targetId}`, {
           headers: {
             "X-Mock-Role": "resident",
             "X-Mock-User-Id": "resident-asim-001",
           },
+          cache: "no-store"
         }),
-        fetch(`${API_BASE_URL}/api/reports/${id}/events`, {
+        fetch(`${baseUrl}/api/reports/${targetId}/events`, {
           headers: {
             "X-Mock-Role": "resident",
             "X-Mock-User-Id": "resident-asim-001",
           },
+          cache: "no-store"
         })
       ]);
 
@@ -58,8 +108,9 @@ export default function ResidentReportClient({ id }: { id: string }) {
         const mId = data.mission_id;
         if (mId) {
           try {
-            const resM = await fetch(`${API_BASE_URL}/api/missions/${mId}`, {
-              headers: { "X-Mock-Role": "resident" }
+            const resM = await fetch(`${baseUrl}/api/missions/${mId}`, {
+              headers: { "X-Mock-Role": "resident" },
+              cache: "no-store"
             });
             if (resM.ok) {
               const mData = await resM.json();
@@ -83,7 +134,7 @@ export default function ResidentReportClient({ id }: { id: string }) {
     loadReportAndEvents();
     const interval = setInterval(loadReportAndEvents, 3500);
     return () => clearInterval(interval);
-  }, [id]);
+  }, [reportId]);
 
   const categoryLabel = report?.category
     ? report.category.replace("_", " ").toUpperCase()
@@ -204,7 +255,7 @@ export default function ResidentReportClient({ id }: { id: string }) {
           <ArrowLeft className="h-3.5 w-3.5 mr-1 text-zinc-400 dark:text-zinc-500" />
           My Reports
         </Link>
-        <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300 font-semibold">{id}</span>
+        <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300 font-semibold">{reportId}</span>
         <ThemeToggle />
       </header>
 
