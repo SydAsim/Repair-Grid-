@@ -20,6 +20,7 @@ class AuthenticatedUser(BaseModel):
     user_id: str
     email: str
     roles: List[str]
+    name: Optional[str] = None
 
 def get_current_user(
     request: Request,
@@ -33,14 +34,18 @@ def get_current_user(
     mock_role = request.headers.get("X-Mock-Role")
     mock_user_id = request.headers.get("X-Mock-User-Id")
     mock_email = request.headers.get("X-Mock-Email")
+    mock_name = request.headers.get("X-Mock-Name")
 
     if mock_role:
         if mock_role not in CANONICAL_ROLES:
             raise HTTPException(status_code=400, detail=f"Invalid mock role: {mock_role}")
+        resolved_email = mock_email or "local-session@repairgrid.invalid"
+        resolved_name = mock_name or resolved_email.split("@")[0].replace(".", " ").title()
         return AuthenticatedUser(
             user_id=mock_user_id or LOCAL_DEMO_IDENTITIES[mock_role],
-            email=mock_email or "local-session@repairgrid.invalid",
-            roles=[mock_role]
+            email=resolved_email,
+            roles=[mock_role],
+            name=resolved_name
         )
 
     # 2. Check JWT Bearer token
@@ -50,7 +55,8 @@ def get_current_user(
             return AuthenticatedUser(
                 user_id="resident-demo-001",
                 email="resident@repairgrid.demo",
-                roles=["resident"]
+                roles=["resident"],
+                name="Resident User"
             )
         raise HTTPException(status_code=401, detail="Authentication credentials missing")
 
@@ -65,11 +71,13 @@ def get_current_user(
             
         user_id = payload.get("sub", "unknown")
         email = payload.get("email", f"{user_id}@repairgrid.demo")
+        name = payload.get("name") or email.split("@")[0].replace(".", " ").title()
         
         return AuthenticatedUser(
             user_id=user_id,
             email=email,
-            roles=groups if groups else ["resident"]
+            roles=groups if groups else ["resident"],
+            name=name
         )
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid or expired token: {str(e)}")

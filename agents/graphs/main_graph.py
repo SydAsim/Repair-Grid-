@@ -103,10 +103,10 @@ class RepairGridGraph:
             if r.get("reportId") == state.get("report_id"):
                 continue
             if r.get("category") == cat and r.get("status") not in ["CLOSED", "MERGED"]:
-                # Check spatial distance (within ~50m is approx 0.0005 deg)
+                # Check spatial distance (within ~15m is approx 0.00015 deg)
                 d_lat = abs(r.get("lat", 0) - lat)
                 d_lng = abs(r.get("lng", 0) - lng)
-                if d_lat < 0.0006 and d_lng < 0.0006:
+                if d_lat < 0.00015 and d_lng < 0.00015:
                     duplicate_match = r
                     break
 
@@ -357,6 +357,8 @@ class RepairGridGraph:
             "lng": lng,
             "description": state.get("description", ""),
             "photoEvidence": evidence_photo,
+            "beforePhoto": evidence_photo,
+            "reporterName": state.get("reporter_name"),
             "duplicateStatus": "UNIQUE" if not state.get("is_duplicate_merged") else "MERGED",
             "version": 1,
         }

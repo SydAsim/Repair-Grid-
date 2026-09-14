@@ -28,19 +28,18 @@ def get_operational_summary(current_user: AuthenticatedUser = Depends(require_ro
     total_reports = len(reports)
     total_missions = len(missions)
     
-    awaiting_acceptance = len([m for m in missions if m.get("status") in ["AWAITING_ACCEPTANCE", "NOTIFICATION_PENDING"]])
+    awaiting_acceptance = len([m for m in missions if m.get("status") in ["PENDING", "SUBMITTED", "AWAITING_ACCEPTANCE", "NOTIFICATION_PENDING"]])
     en_route = len([m for m in missions if m.get("status") == "EN_ROUTE"])
     on_site = len([m for m in missions if m.get("status") in ["ON_SITE", "REPAIR_IN_PROGRESS", "IN_PROGRESS"]])
-    proof_pending = len([m for m in missions if m.get("status") in ["PROOF_SUBMITTED", "COMPLETION_SUBMITTED", "VERIFYING", "AI_VERIFYING"]])
-    verified = len([m for m in missions if m.get("status") == "VERIFIED"])
-    closed = len([m for m in missions if m.get("status") == "CLOSED"])
+    ready_for_review = len([m for m in missions if m.get("status") in ["READY_FOR_REVIEW", "PROOF_SUBMITTED", "COMPLETION_SUBMITTED", "VERIFYING", "AI_VERIFYING", "OPERATOR_REVIEW"]])
+    approved = len([m for m in missions if m.get("status") in ["APPROVED", "VERIFIED", "CLOSED"]])
     
-    active_missions = len([m for m in missions if m.get("status") not in ["CLOSED", "VERIFIED"]])
-    unassigned_reports = len([r for r in reports if not r.get("missionId") or r.get("status") == "SUBMITTED"])
-    critical_missions = len([m for m in missions if (m.get("riskBand") == "CRITICAL" or m.get("priority", 0) >= 80) and m.get("status") != "CLOSED"])
-    high_risk_incidents = len([m for m in missions if (m.get("riskBand") in ["HIGH", "CRITICAL"] or m.get("priority", 0) >= 70) and m.get("status") != "CLOSED"])
+    active_missions = len([m for m in missions if m.get("status") not in ["APPROVED", "CLOSED", "VERIFIED"]])
+    unassigned_reports = len([r for r in reports if not r.get("missionId") or r.get("status") in ["SUBMITTED", "PENDING"]])
+    critical_missions = len([m for m in missions if (m.get("riskBand") == "CRITICAL" or m.get("priority", 0) >= 80) and m.get("status") not in ["APPROVED", "CLOSED"]])
+    high_risk_incidents = len([m for m in missions if (m.get("riskBand") in ["HIGH", "CRITICAL"] or m.get("priority", 0) >= 70) and m.get("status") not in ["APPROVED", "CLOSED"]])
 
-    resolved_today = closed + verified
+    resolved_today = approved
 
     penalty = (critical_missions * 4) + (active_missions * 1)
     bonus = min(resolved_today * 2, 10)
@@ -52,7 +51,7 @@ def get_operational_summary(current_user: AuthenticatedUser = Depends(require_ro
     drain_missions = [m for m in missions if m.get("category") == "blocked_drains"]
 
     def calc_cat_health(cat_m):
-        open_c = len([m for m in cat_m if m.get("status") != "CLOSED"])
+        open_c = len([m for m in cat_m if m.get("status") not in ["APPROVED", "CLOSED", "VERIFIED"]])
         return max(20, 100 - (open_c * 5))
 
     return {
@@ -68,15 +67,18 @@ def get_operational_summary(current_user: AuthenticatedUser = Depends(require_ro
         "active_missions": active_missions,
         "unassigned_reports": unassigned_reports,
         "awaiting_acceptance": awaiting_acceptance,
+        "pending_acceptance": awaiting_acceptance,
         "en_route": en_route,
         "technicians_en_route": en_route,
         "on_site": on_site,
         "on_site_missions": on_site,
-        "proof_pending": proof_pending,
-        "verification_pending": proof_pending,
-        "verified": verified,
-        "closed": closed,
-        "completed_missions": closed + verified,
+        "proof_pending": ready_for_review,
+        "verification_pending": ready_for_review,
+        "ready_for_review": ready_for_review,
+        "verified": approved,
+        "closed": approved,
+        "approved": approved,
+        "completed_missions": approved,
         "critical_missions": critical_missions,
         "high_risk_incidents": high_risk_incidents,
         "resolved_today": resolved_today,
@@ -93,26 +95,75 @@ def _enrich_mission(m: Dict[str, Any]) -> Dict[str, Any]:
         report_ids = [enriched.get("reportId")]
     enriched["reportIds"] = report_ids
 
+    photo = enriched.get("photoEvidence") or enriched.get("beforePhoto")
+    desc = enriched.get("description")
+    loc = enriched.get("location")
+    coords = enriched.get("coordinates")
+    reporter_name = enriched.get("reporterName")
+    after_photo = enriched.get("afterPhoto") or (enriched.get("proofOfRepair", {}).get("afterPhoto") if isinstance(enriched.get("proofOfRepair"), dict) else None)
+    tech_notes = enriched.get("technicianNotes") or (enriched.get("proofOfRepair", {}).get("notes") if isinstance(enriched.get("proofOfRepair"), dict) else None)
+    voice_transcript = enriched.get("voiceTranscript") or (enriched.get("proofOfRepair", {}).get("voiceTranscript") if isinstance(enriched.get("proofOfRepair"), dict) else None)
+    ai_analysis = enriched.get("aiSolution") or enriched.get("aiRecommendation")
+
     if report_ids:
         rep = Database.get_report(report_ids[0])
         if rep:
-            if not enriched.get("photoEvidence") and rep.get("evidenceRefs"):
-                enriched["photoEvidence"] = rep["evidenceRefs"][0]
-            if not enriched.get("description"):
-                enriched["description"] = rep.get("description")
-            if not enriched.get("location"):
-                enriched["location"] = rep.get("locationName")
+            photo = photo or rep.get("beforePhoto") or (rep.get("evidenceRefs", [None])[0] if rep.get("evidenceRefs") else None)
+            desc = desc or rep.get("description")
+            loc = loc or rep.get("locationName")
+            reporter_name = reporter_name or rep.get("reporterName") or (rep.get("reporterEmail", "").split("@")[0].title() if rep.get("reporterEmail") else "Resident")
+            after_photo = after_photo or rep.get("afterPhoto") or rep.get("proofPhoto")
+            tech_notes = tech_notes or rep.get("technicianNotes")
+            if not coords and "lat" in rep and "lng" in rep:
+                coords = {"lat": rep["lat"], "lng": rep["lng"]}
             if not enriched.get("lat") and "lat" in rep:
                 enriched["lat"] = rep["lat"]
                 enriched["lng"] = rep["lng"]
-            if not enriched.get("coordinates") and "lat" in rep:
-                enriched["coordinates"] = {"lat": rep["lat"], "lng": rep["lng"]}
+
+    if not ai_analysis and isinstance(enriched.get("verificationResult"), dict):
+        ai_analysis = enriched["verificationResult"].get("explanation")
+
+    enriched["photoEvidence"] = photo
+    enriched["beforePhoto"] = photo
+    enriched["afterPhoto"] = after_photo
+    enriched["description"] = desc
+    enriched["location"] = loc
+    enriched["coordinates"] = coords
+    enriched["reporterName"] = reporter_name or "Resident"
+    enriched["technicianNotes"] = tech_notes
+    enriched["voiceTranscript"] = voice_transcript
+    enriched["aiAnalysis"] = ai_analysis
     return enriched
 
 @router.get("/missions")
 def list_all_missions(current_user: AuthenticatedUser = Depends(require_roles(["operator", "admin"]))):
     missions = Database.list_missions(limit=100)
     return [_enrich_mission(m) for m in missions]
+
+@router.get("/reports-segmented")
+def get_segmented_reports(current_user: AuthenticatedUser = Depends(require_roles(["operator", "admin"]))):
+    missions = Database.list_missions(limit=150)
+    enriched_missions = [_enrich_mission(m) for m in missions]
+
+    pending_statuses = {"PENDING", "SUBMITTED", "AWAITING_ACCEPTANCE", "MISSION_CREATED", "TRIAGED"}
+    pending_cases = [m for m in enriched_missions if m.get("status") in pending_statuses]
+
+    review_statuses = {"READY_FOR_REVIEW", "PROOF_SUBMITTED", "OPERATOR_REVIEW", "VERIFYING"}
+    ready_for_review_cases = [m for m in enriched_missions if m.get("status") in review_statuses or m.get("verificationStatus") in review_statuses]
+
+    approved_statuses = {"APPROVED", "VERIFIED", "CLOSED"}
+    approved_cases = [m for m in enriched_missions if m.get("status") in approved_statuses or m.get("verificationStatus") == "APPROVED"]
+
+    return {
+        "pending": pending_cases,
+        "ready_for_review": ready_for_review_cases,
+        "approved": approved_cases,
+        "counts": {
+            "pending": len(pending_cases),
+            "ready_for_review": len(ready_for_review_cases),
+            "approved": len(approved_cases)
+        }
+    }
 
 @router.get("/missions/{mission_id}")
 def get_mission_detail(
@@ -151,14 +202,17 @@ def verify_and_close_mission(
     if not m:
         raise HTTPException(status_code=404, detail="Mission not found")
     
-    m["status"] = "CLOSED"
-    m["verificationStatus"] = "VERIFIED"
+    approval_time = Database.now_iso()
+    m["status"] = "APPROVED"
+    m["verificationStatus"] = "APPROVED"
+    m["controllerApprovedAt"] = approval_time
+    m["controllerApprovedBy"] = current_user.user_id
     m["communityConfirmation"] = {
         "confirmed": True,
         "confirmedBy": current_user.user_id,
-        "confirmedAt": Database.now_iso(),
+        "confirmedAt": approval_time,
         "rating": 5,
-        "comment": "Community repair verified and closed by Operations."
+        "comment": "Community repair reviewed, verified and approved by Mission Controller."
     }
     Database.save_mission(m)
 
@@ -166,17 +220,19 @@ def verify_and_close_mission(
         if rep_id:
             rep = Database.get_report(rep_id)
             if rep:
-                rep["status"] = "CLOSED"
+                rep["status"] = "APPROVED"
+                rep["controllerApprovedAt"] = approval_time
+                rep["controllerNotes"] = "Approved by Admission Mission Controller"
                 Database.save_report(rep)
 
     Database.record_event(
         mission_id=mission_id,
-        event_type="MISSION_CLOSED",
+        event_type="MISSION_APPROVED",
         actor_type="OPERATOR",
         actor_id=current_user.user_id,
-        payload={"status": "CLOSED", "note": "Mission verified and closed by operator"}
+        payload={"status": "APPROVED", "note": "Mission verified and approved by operator", "approvedAt": approval_time}
     )
-    return {"status": "CLOSED", "missionId": mission_id}
+    return {"status": "APPROVED", "missionId": mission_id, "approvedAt": approval_time}
 
 @router.get("/workers")
 def list_all_workers(current_user: AuthenticatedUser = Depends(require_roles(["operator", "admin"]))):

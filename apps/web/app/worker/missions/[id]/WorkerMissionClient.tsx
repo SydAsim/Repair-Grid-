@@ -247,6 +247,10 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
         return "repaired";
       case "VERIFYING":
       case "AI_VERIFYING":
+      case "READY_FOR_REVIEW":
+      case "OPERATOR_REVIEW":
+        return "verified";
+      case "APPROVED":
       case "VERIFIED":
       case "CLOSED":
       default:
@@ -507,6 +511,41 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
           </div>
         </div>
 
+        {/* Case Approval or Review Status Banner */}
+        {(mission?.status === "APPROVED" || mission?.status === "VERIFIED" || mission?.status === "CLOSED") && (
+          <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-between text-xs text-emerald-300">
+            <div className="flex items-center space-x-3">
+              <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />
+              <div>
+                <span className="font-extrabold text-sm text-white block">CASE APPROVED BY MISSION CONTROLLER ✓</span>
+                <span className="text-[11px] text-emerald-300">
+                  Before vs After repair photo evidence validated and permanently recorded.
+                </span>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
+              APPROVED
+            </span>
+          </div>
+        )}
+
+        {(mission?.status === "READY_FOR_REVIEW" || mission?.status === "PROOF_SUBMITTED") && (
+          <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-between text-xs text-amber-300">
+            <div className="flex items-center space-x-3">
+              <Clock className="h-6 w-6 text-amber-400 shrink-0" />
+              <div>
+                <span className="font-extrabold text-sm text-white block">UNDER ADMISSION CONTROLLER REVIEW</span>
+                <span className="text-[11px] text-amber-300">
+                  Technician proof submitted. Awaiting Before/After photo comparison sign-off.
+                </span>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold">
+              REVIEW PENDING
+            </span>
+          </div>
+        )}
+
         {/* Citizen Problem Brief Card */}
         <div className="glass-panel rounded-2xl p-5 border border-amber-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/20 shadow-xl space-y-3">
           <div className="flex items-center justify-between">
@@ -522,9 +561,32 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
               Live Submission
             </span>
           </div>
-          <p className="text-sm font-medium text-slate-100 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-            &ldquo;{incidentDesc}&rdquo;
-          </p>
+
+          {/* Reporter Identification */}
+          <div className="flex items-center justify-between bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 text-xs">
+            <div className="flex items-center space-x-2">
+              <div className="h-6 w-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[11px]">
+                {(mission?.reporter_name || mission?.reporterName || "Syed Asim")[0]}
+              </div>
+              <span className="text-slate-400">Reporter:</span>
+              <span className="font-bold text-white">
+                {mission?.reporter_name || mission?.reporterName || "Syed Asim (Resident Citizen)"}
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold">
+              CITIZEN INTAKE
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-semibold">
+              Exact Resident Request:
+            </span>
+            <p className="text-sm font-medium text-slate-100 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+              &ldquo;{incidentDesc}&rdquo;
+            </p>
+          </div>
+
           <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
             <span>Category: <strong className="text-slate-200 capitalize">{(mission?.category || "Infrastructure").replace("_", " ")}</strong></span>
             <span>Skill Match: <strong className="text-emerald-400 capitalize">{(mission?.required_skill || "Surface Repair").replace("_", " ")}</strong></span>
@@ -941,18 +1003,22 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
             </button>
           )}
 
-          {(mission?.status === "PROOF_SUBMITTED" || mission?.status === "VERIFIED" || mission?.status === "CLOSED") && (
+          {(mission?.status === "PROOF_SUBMITTED" || mission?.status === "READY_FOR_REVIEW" || mission?.status === "VERIFIED" || mission?.status === "APPROVED" || mission?.status === "CLOSED") && (
             <div className="space-y-2">
               <div className="p-4 text-center rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-mono font-semibold flex items-center justify-center gap-2">
                 <CheckCircle2 className="h-4 w-4" />
-                <span>Proof Submitted • Verification Status: {mission?.status}</span>
+                <span>
+                  {mission?.status === "APPROVED" || mission?.status === "VERIFIED" || mission?.status === "CLOSED"
+                    ? "Case Approved by Controller ✓ — Repair Verified"
+                    : "Proof Submitted • Under Admission Controller Review"}
+                </span>
               </div>
               <button
                 type="button"
                 onClick={() => { window.location.href = `/worker/missions/${missionId}/complete/`; }}
                 className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition flex items-center justify-center space-x-2"
               >
-                <span>Inspect Bedrock / Nova Vision Verification Result</span>
+                <span>Inspect Before vs After Proof & AI Verification</span>
                 <ExternalLink className="h-3.5 w-3.5" />
               </button>
             </div>

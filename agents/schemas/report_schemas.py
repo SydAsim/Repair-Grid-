@@ -10,6 +10,7 @@ class ReportCategory(str, Enum):
 
 class ReportStatus(str, Enum):
     SUBMITTED = "SUBMITTED"
+    PENDING = "PENDING"
     GEOCODED = "GEOCODED"
     TRIAGED = "TRIAGED"
     DUPLICATE_CHECKED = "DUPLICATE_CHECKED"
@@ -20,12 +21,14 @@ class ReportStatus(str, Enum):
     ON_SITE = "ON_SITE"
     REPAIR_IN_PROGRESS = "REPAIR_IN_PROGRESS"
     PROOF_SUBMITTED = "PROOF_SUBMITTED"
+    READY_FOR_REVIEW = "READY_FOR_REVIEW"
     VERIFYING = "VERIFYING"
     VERIFIED = "VERIFIED"
     COMMUNITY_CONFIRMATION = "COMMUNITY_CONFIRMATION"
     MERGED = "MERGED"
     ASSIGNED = "ASSIGNED"
     IN_PROGRESS = "IN_PROGRESS"
+    APPROVED = "APPROVED"
     RESOLVED = "RESOLVED"
     CLOSED = "CLOSED"
 
@@ -35,6 +38,7 @@ class ReportCreateRequest(BaseModel):
     lat: float = Field(ge=-90, le=90, description="Latitude of reported problem")
     lng: float = Field(ge=-180, le=180, description="Longitude of reported problem")
     location_name: Optional[str] = Field(None, description="Human readable location address, street, or landmark")
+    reporter_name: Optional[str] = Field(None, description="Resident or citizen reporter name")
     image_url: Optional[str] = Field(None, description="S3 presigned uploaded image key or URL")
     voice_note_url: Optional[str] = Field(None, description="Optional voice audio key")
 
@@ -45,6 +49,7 @@ class ResolutionFeedbackRequest(BaseModel):
 class ReportResponse(BaseModel):
     report_id: str
     reporter_id: str
+    reporter_name: Optional[str] = None
     organization_id: str
     category: ReportCategory
     description: str
@@ -56,6 +61,11 @@ class ReportResponse(BaseModel):
     verification_confidence: float = 0.0
     duplicate_of: Optional[str] = None
     evidence_refs: List[str] = []
+    before_photo: Optional[str] = None
+    after_photo: Optional[str] = None
+    technician_notes: Optional[str] = None
+    controller_approved_at: Optional[str] = None
+    controller_notes: Optional[str] = None
     mission_id: Optional[str] = None
     created_at: str
     updated_at: str
@@ -69,3 +79,9 @@ class PublicIssueMapItem(BaseModel):
     priority: int
     created_at: str
     title: str
+    location_name: Optional[str] = None
+    reporter_name: Optional[str] = None
+    before_photo: Optional[str] = None
+    after_photo: Optional[str] = None
+    technician_name: Optional[str] = None
+    approved_at: Optional[str] = None

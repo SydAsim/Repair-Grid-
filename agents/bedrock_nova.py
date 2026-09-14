@@ -44,8 +44,21 @@ def _image_bytes(reference: str) -> Tuple[bytes, str]:
         return body, "jpeg" if image_format in ("jpg", "jpeg") else image_format
 
     if reference.startswith(("http://", "https://")):
+        parsed = urlparse(reference)
+        # Directly read through boto3 S3 if it targets the RepairGrid evidence bucket
+        if "s3.amazonaws.com" in parsed.netloc or "repairgrid-evidence" in parsed.netloc:
+            try:
+                bucket_name = parsed.netloc.split(".s3")[0]
+                object_key = parsed.path.lstrip("/")
+                s3_client = boto3.client("s3", region_name=os.getenv("AWS_REGION", "us-east-1"))
+                body = s3_client.get_object(Bucket=bucket_name, Key=object_key)["Body"].read()
+                image_format = Path(object_key).suffix.lower().lstrip(".") or "jpeg"
+                return body, "jpeg" if image_format in ("jpg", "jpeg") else image_format
+            except Exception as s3_err:
+                print(f"Direct S3 IAM read failed, falling back to urlopen: {s3_err}")
+
         request = Request(reference, headers={"User-Agent": "RepairGrid/1.0"})
-        with urlopen(request, timeout=12) as response:
+        with urlopen(request, timeout=6) as response:
             body = response.read(8 * 1024 * 1024)
             content_type = response.headers.get_content_type()
         image_format = mimetypes.guess_extension(content_type or "") or Path(urlparse(reference).path).suffix

@@ -57,9 +57,9 @@ export default function ReportPage() {
   const recognitionRef = useRef<any>(null);
 
   // Step 2: Location
-  const [lat, setLat] = useState<number>(37.7751);
-  const [lng, setLng] = useState<number>(-122.4190);
-  const [locationName, setLocationName] = useState("Gate 2, University Road, Campus District");
+  const [lat, setLat] = useState<number>(() => Number((37.7751 + (Math.random() - 0.5) * 0.003).toFixed(4)));
+  const [lng, setLng] = useState<number>(() => Number((-122.4190 + (Math.random() - 0.5) * 0.003).toFixed(4)));
+  const [locationName, setLocationName] = useState("Campus District, Main Sector");
   const [manualLocationMode, setManualLocationMode] = useState(false);
   const [gpsDetecting, setGpsDetecting] = useState(false);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(4.2);
@@ -156,7 +156,7 @@ export default function ReportPage() {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      const maxDim = 1024;
+      const maxDim = 720;
       let w = video.videoWidth || 640;
       let h = video.videoHeight || 480;
       if (w > maxDim || h > maxDim) {
@@ -173,7 +173,7 @@ export default function ReportPage() {
       const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.drawImage(video, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.65);
         setPhotoDataUrl(dataUrl);
         stopCamera();
         setPhotoMode("choose");
@@ -190,7 +190,7 @@ export default function ReportPage() {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const maxDim = 1024;
+          const maxDim = 720;
           let w = img.width;
           let h = img.height;
           if (w > maxDim || h > maxDim) {
@@ -207,7 +207,7 @@ export default function ReportPage() {
           const ctx = canvas.getContext("2d");
           if (ctx) {
             ctx.drawImage(img, 0, 0, w, h);
-            const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.65);
             setPhotoDataUrl(dataUrl);
           } else {
             setPhotoDataUrl(rawResult);
@@ -318,6 +318,7 @@ export default function ReportPage() {
           lat,
           lng,
           location_name: locationName.trim() || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+          reporter_name: user?.name || "Resident Citizen",
           image_url: photoDataUrl || null,
         }),
       });

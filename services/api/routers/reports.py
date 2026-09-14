@@ -40,7 +40,15 @@ def create_report(
                 Body=image_bytes,
                 ContentType="image/jpeg" if ext == "jpg" else f"image/{ext}"
             )
-            evidence_url = f"https://{bucket_name}.s3.amazonaws.com/{file_key}"
+            try:
+                evidence_url = s3.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": bucket_name, "Key": file_key},
+                    ExpiresIn=604800
+                )
+            except Exception as sign_err:
+                print(f"Presign url error: {sign_err}")
+                evidence_url = f"https://{bucket_name}.s3.amazonaws.com/{file_key}"
         except Exception as upload_err:
             print(f"S3 upload error for data URL: {upload_err}")
             evidence_url = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800"
@@ -52,9 +60,14 @@ def create_report(
     lng_prefix = f"{req.lng:.3f}".replace(".", "")
     geohash = f"{lat_prefix}_{lng_prefix}"
 
+    reporter_name = req.reporter_name or current_user.name or (
+        current_user.email.split("@")[0].replace(".", " ").title() if current_user.email else "Resident"
+    )
+
     report_item = {
         "reportId": report_id,
         "reporterId": current_user.user_id,
+        "reporterName": reporter_name,
         "reporterEmail": current_user.email,
         "organizationId": "campus-district-01",
         "category": req.category.value,
@@ -63,10 +76,11 @@ def create_report(
         "lng": req.lng,
         "locationName": req.location_name or f"{req.lat:.4f}, {req.lng:.4f}",
         "geohash": geohash,
-        "status": ReportStatus.SUBMITTED.value,
+        "status": ReportStatus.PENDING.value,
         "verificationConfidence": 0.0,
         "duplicateOf": None,
         "evidenceRefs": evidence_refs,
+        "beforePhoto": evidence_url,
     }
 
     saved = Database.save_report(report_item)
@@ -75,7 +89,13 @@ def create_report(
         event_type="REPORT_SUBMITTED",
         actor_type="RESIDENT",
         actor_id=current_user.user_id,
-        payload={"category": req.category.value, "description": req.description, "location": saved.get("locationName")}
+        payload={
+            "category": req.category.value,
+            "description": req.description,
+            "location": saved.get("locationName"),
+            "reporterName": reporter_name,
+            "status": ReportStatus.PENDING.value
+        }
     )
     Database.record_event(
         mission_id=report_id,
@@ -97,6 +117,7 @@ def create_report(
             "lng": req.lng,
             "location": saved.get("locationName"),
             "address": saved.get("locationName"),
+            "reporter_name": reporter_name,
             "photo_evidence": evidence_url,
             "evidenceRefs": evidence_refs,
         }
@@ -111,6 +132,7 @@ def create_report(
     return ReportResponse(
         report_id=current_saved["reportId"],
         reporter_id=current_saved["reporterId"],
+        reporter_name=current_saved.get("reporterName", reporter_name),
         organization_id=current_saved["organizationId"],
         category=current_saved["category"],
         description=current_saved["description"],
@@ -118,12 +140,15 @@ def create_report(
         lng=current_saved["lng"],
         location_name=current_saved.get("locationName"),
         geohash=current_saved["geohash"],
-        # POST acknowledges the resident submission. The linked case may already
-        # have progressed synchronously; clients fetch the canonical timeline next.
-        status=ReportStatus.SUBMITTED.value,
+        status=current_saved.get("status", ReportStatus.PENDING.value),
         verification_confidence=current_saved.get("verificationConfidence", 0.0),
         duplicate_of=current_saved.get("duplicateOf"),
         evidence_refs=current_saved.get("evidenceRefs", []),
+        before_photo=current_saved.get("beforePhoto") or (current_saved.get("evidenceRefs", [None])[0] if current_saved.get("evidenceRefs") else None),
+        after_photo=current_saved.get("afterPhoto") or current_saved.get("proofPhoto"),
+        technician_notes=current_saved.get("technicianNotes"),
+        controller_approved_at=current_saved.get("controllerApprovedAt"),
+        controller_notes=current_saved.get("controllerNotes"),
         mission_id=current_saved.get("missionId", mission_id),
         created_at=current_saved["createdAt"],
         updated_at=current_saved["updatedAt"]
@@ -146,6 +171,7 @@ def get_my_reports(current_user: AuthenticatedUser = Depends(get_current_user)):
         ReportResponse(
             report_id=r["reportId"],
             reporter_id=r["reporterId"],
+            reporter_name=r.get("reporterName") or current_user.name or (r.get("reporterEmail", "").split("@")[0].title() or "Resident"),
             organization_id=r["organizationId"],
             category=r["category"],
             description=r["description"],
@@ -157,6 +183,11 @@ def get_my_reports(current_user: AuthenticatedUser = Depends(get_current_user)):
             verification_confidence=r.get("verificationConfidence", 0.0),
             duplicate_of=r.get("duplicateOf"),
             evidence_refs=r.get("evidenceRefs", []),
+            before_photo=r.get("beforePhoto") or (r.get("evidenceRefs", [None])[0] if r.get("evidenceRefs") else None),
+            after_photo=r.get("afterPhoto") or r.get("proofPhoto"),
+            technician_notes=r.get("technicianNotes"),
+            controller_approved_at=r.get("controllerApprovedAt"),
+            controller_notes=r.get("controllerNotes"),
             mission_id=r.get("missionId"),
             created_at=r["createdAt"],
             updated_at=r["updatedAt"]
@@ -194,6 +225,7 @@ def get_report_by_id(
     return ReportResponse(
         report_id=report["reportId"],
         reporter_id=reporter_id,
+        reporter_name=report.get("reporterName", "Resident"),
         organization_id=report["organizationId"],
         category=report["category"],
         description=report["description"],
@@ -205,6 +237,11 @@ def get_report_by_id(
         verification_confidence=report.get("verificationConfidence", 0.0),
         duplicate_of=report.get("duplicateOf"),
         evidence_refs=report.get("evidenceRefs", []),
+        before_photo=report.get("beforePhoto") or (report.get("evidenceRefs", [None])[0] if report.get("evidenceRefs") else None),
+        after_photo=report.get("afterPhoto") or report.get("proofPhoto"),
+        technician_notes=report.get("technicianNotes"),
+        controller_approved_at=report.get("controllerApprovedAt"),
+        controller_notes=report.get("controllerNotes"),
         mission_id=report.get("missionId"),
         created_at=report["createdAt"],
         updated_at=report["updatedAt"]
@@ -253,6 +290,12 @@ def get_public_issues():
             lng=r["lng"],
             priority=50,
             created_at=r["createdAt"],
-            title=f"{r['category'].replace('_', ' ').capitalize()} Issue"
+            title=f"{r['category'].replace('_', ' ').capitalize()} Issue",
+            location_name=r.get("locationName"),
+            reporter_name=r.get("reporterName"),
+            before_photo=r.get("beforePhoto") or (r.get("evidenceRefs", [None])[0] if r.get("evidenceRefs") else None),
+            after_photo=r.get("afterPhoto") or r.get("proofPhoto"),
+            technician_name=r.get("technicianName"),
+            approved_at=r.get("controllerApprovedAt")
         ))
     return items

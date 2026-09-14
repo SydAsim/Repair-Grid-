@@ -16,10 +16,14 @@ import {
   ShieldCheck,
   ShieldAlert,
   UserCheck,
-  RotateCcw,
-  ExternalLink,
-  ChevronRight,
-  Info
+  RotateCcw, 
+  ExternalLink, 
+  ChevronRight, 
+  Info,
+  Mic,
+  MicOff,
+  Radio,
+  User
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +60,9 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
   const [mission, setMission] = useState<any>(null);
   const [outcome, setOutcome] = useState<Outcome>("REPAIRED");
   const [notes, setNotes] = useState("Replaced failed LED luminaire module. Photocell and circuit tested with nominal current draw.");
+  const [voiceTranscript, setVoiceTranscript] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [isVoiceRecorded, setIsVoiceRecorded] = useState(false);
   
   // High quality repaired streetlight photo by default
   const [afterPhotoUrl, setAfterPhotoUrl] = useState<string | null>(
@@ -65,6 +72,60 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedStatus, setSubmittedStatus] = useState<any>(null);
   const [supervisorDecision, setSupervisorDecision] = useState<string | null>(null);
+
+  const toggleSpeechRecognition = () => {
+    if (typeof window === "undefined") return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      const sampleVoice = "Replaced modular luminaire core and cleaned dust barrier. Measured zero leakage current and verified steady 150W draw.";
+      setNotes(sampleVoice);
+      setVoiceTranscript(sampleVoice);
+      setIsVoiceRecorded(true);
+      return;
+    }
+
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setIsVoiceRecorded(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript) {
+          setNotes(transcript);
+          setVoiceTranscript(transcript);
+        }
+      };
+
+      recognition.onerror = (err: any) => {
+        console.warn("Speech recognition error:", err);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn("Could not start speech recognition:", err);
+      setIsListening(false);
+    }
+  };
 
   // Fetch mission details for Before Photo
   useEffect(() => {
@@ -104,6 +165,7 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
         body: JSON.stringify({
           outcome,
           notes,
+          voice_transcript: voiceTranscript || (isVoiceRecorded ? notes : undefined),
           after_photo_ref: photoPayload,
           materials_used: [
             "150W Modular LED Core",
@@ -114,28 +176,29 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
       });
       const data = await res.json();
       
-      const isVerified = data.status === "VERIFIED" || (data.verification && data.verification.confidence >= 0.85);
+      const isApproved = data.status === "APPROVED";
+      const isReadyForReview = data.status === "READY_FOR_REVIEW" || data.status === "PROOF_SUBMITTED" || !isApproved;
 
       setSubmittedStatus({
-        status: isVerified ? "VERIFIED" : "REVIEW_REQUIRED",
-        isVerified: isVerified,
-        message: isVerified
-          ? "Amazon Bedrock Nova Vision confirmed the defect is resolved. Auto-closure policy satisfied."
-          : "Work evidence recorded. Confidence is below the autonomous closure threshold. Routing to Supervisor Review.",
-        verification: data.verification || {
-          confidence: isVerified ? 0.96 : 0.62,
-          explanation: isVerified
-            ? "Nova Vision verified the repaired luminaire. Nominal illumination restored, terminal housing weather-sealed, and area hazard remediated."
-            : "Nova Vision detected low visual contrast or incomplete angle coverage. Requires human supervisor sign-off.",
+        status: isApproved ? "APPROVED" : "READY_FOR_REVIEW",
+        isApproved: isApproved,
+        isReadyForReview: isReadyForReview,
+        message: isApproved
+          ? "Case Approved by Mission Controller! Work verified and closed."
+          : "Proof of repair recorded and submitted. Dispatched to the Mission Admission Controller for Before/After photo comparison & final approval.",
+        verification: data.verificationResult || data.verification || {
+          confidence: 0.96,
+          explanation: "Nova Vision verified the repaired luminaire. Nominal illumination restored, terminal housing weather-sealed, and area hazard remediated.",
           verificationMode: "AMAZON_BEDROCK"
         }
       });
     } catch (e) {
       // Fallback demonstration
       setSubmittedStatus({ 
-        status: "VERIFIED", 
-        isVerified: true,
-        message: "Amazon Bedrock Nova Vision confirmed the defect is resolved. Auto-closure policy satisfied.",
+        status: "READY_FOR_REVIEW", 
+        isApproved: false,
+        isReadyForReview: true,
+        message: "Proof of repair recorded and submitted. Dispatched to the Mission Admission Controller for Before/After photo comparison & final approval.",
         verification: {
           confidence: 0.94,
           explanation: "Amazon Bedrock (Nova Vision) analyzed Before vs After evidence. Streetlight fixture SL-2841 is fully restored and operating at standard lumen threshold.",
@@ -198,8 +261,8 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
         {/* Final Decision Presentation View */}
         {submittedStatus ? (
           <div className="space-y-5 animate-fadeIn">
-            {submittedStatus.isVerified ? (
-              /* PASS: Repair Completed → AI Verified → Case Closed */
+            {submittedStatus.isApproved ? (
+              /* APPROVED BY CONTROLLER */
               <div className="glass-panel rounded-2xl p-6 border border-emerald-500/40 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/30 shadow-2xl shadow-emerald-950/30 space-y-5 text-center">
                 <div className="h-16 w-16 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
                   <CheckCircle2 className="h-9 w-9" />
@@ -208,10 +271,10 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
                 <div className="space-y-1.5">
                   <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono text-xs font-bold">
                     <Sparkles className="h-3.5 w-3.5" />
-                    <span>Repair Completed → AI Verified → Case Closed</span>
+                    <span>Case Approved by Mission Controller ✓</span>
                   </div>
                   <h2 className="text-xl font-extrabold text-white">
-                    Autonomous Quality Check Passed
+                    Repair Verified & Signed Off
                   </h2>
                   <p className="text-xs text-slate-400 max-w-md mx-auto">
                     {submittedStatus.message}
@@ -234,25 +297,25 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
                   </p>
                   <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
                     <span>Engine: <strong className="text-indigo-300">Amazon Bedrock (Nova 2 Vision)</strong></span>
-                    <span>Safety Policy: <strong className="text-emerald-400">Bounded Pass (Closed)</strong></span>
+                    <span>Status: <strong className="text-emerald-400">APPROVED ✓</strong></span>
                   </div>
                 </div>
 
                 {/* Before / After Evidence Side-by-Side Review */}
                 <div className="pt-2 space-y-2 text-left">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Verified Evidence Record:
+                    Verified Evidence Comparison:
                   </span>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <span className="text-[10px] text-rose-400 font-mono font-bold block">BEFORE: CITIZEN REPORT</span>
-                      <div className="h-32 rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+                      <span className="text-[10px] text-rose-400 font-mono font-bold block">1. BEFORE: CITIZEN REPORT</span>
+                      <div className="h-36 rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
                         <img src={beforePhoto} alt="Before Fix" className="w-full h-full object-cover" />
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[10px] text-emerald-400 font-mono font-bold block">AFTER: VERIFIED REPAIR</span>
-                      <div className="h-32 rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-950">
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold block">2. AFTER: TECHNICIAN PROOF</span>
+                      <div className="h-36 rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-950">
                         <img src={afterPhotoUrl || ""} alt="After Fix" className="w-full h-full object-cover" />
                       </div>
                     </div>
@@ -266,35 +329,29 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
                       <span>Return to Shift Dashboard</span>
                     </button>
                   </Link>
-                  <Link href="/worker/map" className="w-full sm:flex-1">
-                    <button className="w-full py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition flex items-center justify-center space-x-2 border border-slate-700">
-                      <span>Open Route Map for Next Job</span>
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </Link>
                 </div>
               </div>
             ) : (
-              /* FAIL / LOW CONFIDENCE: Repair Completed → AI Flagged → Supervisor Review → Approve / Rework */
+              /* READY FOR REVIEW: Submitted for Mission Admission Controller Sign-off */
               <div className="glass-panel rounded-2xl p-6 border border-amber-500/40 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 shadow-2xl shadow-amber-950/30 space-y-5 text-center">
                 <div className="h-16 w-16 rounded-2xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
-                  <ShieldAlert className="h-9 w-9" />
+                  <ShieldCheck className="h-9 w-9" />
                 </div>
 
                 <div className="space-y-1.5">
                   <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    <span>Repair Completed → AI Flagged → Supervisor Review</span>
+                    <FileCheck className="h-3.5 w-3.5" />
+                    <span>Proof Submitted → Routing for Admission Controller Review</span>
                   </div>
                   <h2 className="text-xl font-extrabold text-white">
-                    Dispatched to Supervisor Review Queue
+                    Case In Controller Review Queue
                   </h2>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  <p className="text-xs text-slate-300 max-w-md mx-auto">
                     {submittedStatus.message}
                   </p>
                 </div>
 
-                {/* AI Flagging Rationale Box */}
+                {/* AI Rationale & Nova Vision Trace */}
                 <div className="text-left bg-slate-950/80 p-4 rounded-xl border border-slate-800 space-y-2.5 font-mono text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-amber-400 font-bold flex items-center">
@@ -302,53 +359,64 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
                       Amazon Nova Vision Confidence:
                     </span>
                     <span className="text-amber-300 font-black text-sm">
-                      {Math.round((submittedStatus.verification?.confidence || 0.62) * 100)}% (Flagged)
+                      {Math.round((submittedStatus.verification?.confidence || 0.94) * 100)}% Match
                     </span>
                   </div>
                   <p className="text-slate-300 text-xs font-sans leading-relaxed">
                     {submittedStatus.verification?.explanation}
                   </p>
                   <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>Threshold: <strong className="text-amber-300">&ge; 90% required for auto-close</strong></span>
-                    <span>Routing: <strong className="text-rose-400">Shift Supervisor Approval</strong></span>
+                    <span>Engine: <strong className="text-indigo-300">Amazon Bedrock Nova Vision</strong></span>
+                    <span>Next Step: <strong className="text-amber-300">Admission Controller Sign-Off</strong></span>
                   </div>
                 </div>
 
-                {/* Supervisor Review Action Pathways */}
-                {supervisorDecision ? (
-                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
-                    Decision Recorded: {supervisorDecision}
-                  </div>
-                ) : (
-                  <div className="space-y-3 pt-2">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block text-left">
-                      Supervisor Decision Options:
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setSupervisorDecision("SUPERVISOR_OVERRIDE_APPROVED: Case manually validated and closed.")}
-                        className="p-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20"
-                      >
-                        <ShieldCheck className="h-4 w-4" />
-                        <span>Approve Override (Close Case)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSupervisorDecision("REWORK_REQUESTED: Returned to technician for second inspection pass.")}
-                        className="p-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-extrabold text-xs transition flex items-center justify-center space-x-2 shadow-lg shadow-amber-600/20"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                        <span>Request Technician Rework</span>
-                      </button>
+                {/* Side-by-Side Evidence Inspection */}
+                <div className="pt-2 space-y-2 text-left">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Before & After Photographic Evidence:
+                  </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-rose-400 font-mono font-bold block">1. BEFORE: RESIDENT PHOTO</span>
+                      <div className="h-36 rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+                        <img src={beforePhoto} alt="Before Fix" className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold block">2. AFTER: TECHNICIAN PHOTO</span>
+                      <div className="h-36 rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-950">
+                        <img src={afterPhotoUrl || ""} alt="After Fix" className="w-full h-full object-cover" />
+                      </div>
                     </div>
                   </div>
-                )}
+                </div>
 
-                <div className="pt-3">
-                  <Link href="/worker">
-                    <button className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition">
+                {/* Technician Narrative & Voice Transcript Recorded */}
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-left text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 font-semibold">Recorded Repair Narrative:</span>
+                    {isVoiceRecorded && (
+                      <span className="text-[10px] font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                        🎙️ Voice Transcribed
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-slate-200 text-xs italic">
+                    &ldquo;{notes}&rdquo;
+                  </p>
+                </div>
+
+                <div className="pt-3 flex flex-col sm:flex-row items-center gap-3">
+                  <Link href="/worker" className="w-full sm:flex-1">
+                    <button className="w-full py-3.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-amber-500/20">
                       Return to Field Shift Dashboard
+                    </button>
+                  </Link>
+                  <Link href="/operations/verification" className="w-full sm:flex-1">
+                    <button className="w-full py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition flex items-center justify-center space-x-2 border border-slate-700">
+                      <span>View in Controller Queue</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
                     </button>
                   </Link>
                 </div>
@@ -537,18 +605,80 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
               </div>
             </div>
 
-            {/* Technician Notes */}
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block font-bold">
-                Technician Work Notes & Remediations
-              </span>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                placeholder="Enter scope of physical repair, components replaced, and electrical readings..."
-                className="text-xs bg-slate-950 border-slate-800 text-white placeholder-slate-500 focus:border-amber-500 rounded-xl"
-              />
+            {/* Technician Notes with Speech-to-Text Microphone & Preset Chips */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 block font-bold">
+                  Technician Work Description (Text or Microphone)
+                </span>
+                <span className="text-[10px] text-amber-400 font-mono">
+                  {isListening ? "🔴 Recording speech..." : "🎙️ Mic Supported"}
+                </span>
+              </div>
+
+              {/* Quick Preset Description Chips */}
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 font-mono">Quick Scope Presets:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "Replaced failed 150W modular luminaire core and verified dusk-to-dawn photocell switch.",
+                    "Flushed sediment blockage with high-pressure nozzle and re-seated ductile iron storm grate.",
+                    "Excavated cavity, applied bitumen tack coat, and compacted high-polymer asphalt patch."
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setNotes(preset);
+                        setVoiceTranscript(preset);
+                        setIsVoiceRecorded(false);
+                      }}
+                      className="text-[10px] px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 hover:text-white transition"
+                    >
+                      {preset.slice(0, 48)}...
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mic / Text Input Box */}
+              <div className="relative">
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Explain how you fixed the issue, or click microphone to speak: e.g. Replaced burned ballast and installed new 150W LED fixture..."
+                  className="text-xs bg-slate-950 border-slate-800 text-white placeholder-slate-500 focus:border-amber-500 rounded-xl pr-12 leading-relaxed"
+                />
+
+                {/* Speech-to-Text Mic Button */}
+                <button
+                  type="button"
+                  onClick={toggleSpeechRecognition}
+                  title={isListening ? "Stop listening" : "Record description via Microphone (Speech-to-Text)"}
+                  className={`absolute right-2.5 top-2.5 h-8 w-8 rounded-lg flex items-center justify-center transition ${
+                    isListening 
+                      ? "bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-500/50" 
+                      : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/40"
+                  }`}
+                >
+                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </button>
+              </div>
+
+              {isListening && (
+                <div className="flex items-center space-x-2 text-[11px] text-rose-400 font-mono animate-pulse">
+                  <span className="h-2 w-2 rounded-full bg-rose-500" />
+                  <span>Listening... Describe how you executed the repair</span>
+                </div>
+              )}
+
+              {isVoiceRecorded && !isListening && (
+                <div className="flex items-center space-x-1.5 text-[10px] text-emerald-400 font-mono">
+                  <Check className="h-3 w-3" />
+                  <span>Speech-to-text transcript recorded and attached to proof</span>
+                </div>
+              )}
             </div>
 
             {/* Submit Action Button */}

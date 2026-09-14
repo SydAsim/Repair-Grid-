@@ -29,6 +29,7 @@ import { getApiBaseUrl } from "@/lib/config";
 interface Report {
   report_id: string;
   reporter_id: string;
+  reporter_name?: string;
   category: string;
   description: string;
   lat: number;
@@ -38,6 +39,10 @@ interface Report {
   verification_confidence: number;
   duplicate_of?: string | null;
   evidence_refs: string[];
+  before_photo?: string;
+  after_photo?: string;
+  technician_notes?: string;
+  controller_approved_at?: string;
   mission_id?: string;
   created_at: string;
 }
@@ -159,24 +164,27 @@ export default function ResidentHomePage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "SUBMITTED":
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">SUBMITTED</span>;
+      case "PENDING":
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">PENDING DISPATCH</span>;
       case "MISSION_CREATED":
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">AGENT TRIAGED</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">AGENT TRIAGED</span>;
       case "AWAITING_ACCEPTANCE":
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">AWAITING TECHNICIAN</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">AWAITING TECHNICIAN</span>;
       case "ACCEPTED":
       case "EN_ROUTE":
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">DISPATCHED</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">DISPATCHED (EN ROUTE)</span>;
       case "IN_PROGRESS":
       case "ON_SITE":
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">ON-SITE REPAIR</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">ON-SITE REPAIR</span>;
       case "PROOF_SUBMITTED":
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">AI VERIFYING</span>;
+      case "READY_FOR_REVIEW":
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">READY FOR CONTROLLER REVIEW</span>;
+      case "APPROVED":
       case "CLOSED":
       case "RESOLVED":
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">RESOLVED ✓</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10">APPROVED ✓</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">{status}</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">{status}</span>;
     }
   };
 
@@ -416,6 +424,67 @@ export default function ResidentHomePage() {
               <span>Report New Problem</span>
             </Link>
 
+            {/* Real-time Case Update Banner for Resident */}
+            {reports.length > 0 && (
+              <div className={`p-4 rounded-2xl border transition shadow-lg ${
+                reports[0].status === "APPROVED" || reports[0].status === "CLOSED"
+                  ? "bg-emerald-950/25 border-emerald-500/40 shadow-emerald-950/20"
+                  : reports[0].status === "READY_FOR_REVIEW"
+                  ? "bg-cyan-950/25 border-cyan-500/40 shadow-cyan-950/20"
+                  : reports[0].status === "ACCEPTED" || reports[0].status === "EN_ROUTE"
+                  ? "bg-blue-950/25 border-blue-500/40 shadow-blue-950/20"
+                  : "bg-amber-950/25 border-amber-500/40 shadow-amber-950/20"
+              }`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start space-x-3">
+                    <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                      reports[0].status === "APPROVED" || reports[0].status === "CLOSED"
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : reports[0].status === "READY_FOR_REVIEW"
+                        ? "bg-cyan-500/20 text-cyan-400"
+                        : reports[0].status === "ACCEPTED" || reports[0].status === "EN_ROUTE"
+                        ? "bg-blue-500/20 text-blue-400"
+                        : "bg-amber-500/20 text-amber-400"
+                    }`}>
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                        {reports[0].status === "APPROVED" || reports[0].status === "CLOSED"
+                          ? "🎉 Case Approved & Resolved!"
+                          : reports[0].status === "READY_FOR_REVIEW"
+                          ? "📋 Repair Finished • Under Mission Controller Review"
+                          : reports[0].status === "ACCEPTED" || reports[0].status === "EN_ROUTE"
+                          ? "🚚 Technician Dispatched & En Route"
+                          : "⏳ Case Update: Your Case is PENDING"}
+                      </h4>
+                      <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                        {reports[0].status === "APPROVED" || reports[0].status === "CLOSED"
+                          ? "Mission Controller has reviewed the Before and After evidence and APPROVED the repair closure."
+                          : reports[0].status === "READY_FOR_REVIEW"
+                          ? "Technician completed physical work and submitted proof. Awaiting final Controller sign-off."
+                          : reports[0].status === "ACCEPTED" || reports[0].status === "EN_ROUTE"
+                          ? "Assigned field specialist has accepted your case and is traveling to the site."
+                          : "Your problem report is currently PENDING technician acceptance. Triage and dispatch are in progress."}
+                      </p>
+                      <div className="flex items-center space-x-2 mt-2 text-[10px] font-mono text-slate-400">
+                        <span>Case: <strong className="text-white">{reports[0].report_id}</strong></span>
+                        <span>•</span>
+                        <span>Status: <strong className="text-indigo-300">{reports[0].status}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/resident/reports/${reports[0].report_id}/`}
+                    className="text-xs font-bold text-indigo-400 hover:text-indigo-300 shrink-0 flex items-center"
+                  >
+                    <span>Track</span>
+                    <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                  </Link>
+                </div>
+              </div>
+            )}
+
             {/* Your Reports Section */}
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -468,43 +537,90 @@ export default function ResidentHomePage() {
               ) : (
                 /* Report Cards */
                 <div className="space-y-3">
-                  {reports.map((report) => (
-                    <Link
-                      key={report.report_id}
-                      href={`/resident/reports/${report.report_id}/`}
-                      onClick={(e) => { e.preventDefault(); window.location.href = `/resident/reports/${report.report_id}/`; }}
-                      className="glass-panel rounded-xl p-4 flex items-center justify-between block hover:border-indigo-500/40 hover:bg-slate-900/90 transition group"
-                    >
-                      <div className="flex items-center space-x-3.5">
-                        <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
-                          {getCategoryIcon(report.category)}
-                        </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <h3 className="text-sm font-bold text-white capitalize">
-                              {report.category.replace("_", " ")} Issue
-                            </h3>
-                            {getStatusBadge(report.status)}
+                  {reports.map((report) => {
+                    const isApproved = report.status === "APPROVED" || report.status === "CLOSED" || report.status === "RESOLVED";
+                    const isPending = report.status === "PENDING" || report.status === "SUBMITTED";
+                    return (
+                      <Link
+                        key={report.report_id}
+                        href={`/resident/reports/${report.report_id}/`}
+                        onClick={(e) => { e.preventDefault(); window.location.href = `/resident/reports/${report.report_id}/`; }}
+                        className={`glass-panel rounded-2xl p-4 flex flex-col gap-3 block hover:bg-slate-900/90 transition group border ${
+                          isApproved
+                            ? "border-emerald-500/40 bg-emerald-950/10 shadow-lg shadow-emerald-950/15 hover:border-emerald-500/60"
+                            : isPending
+                            ? "border-amber-500/30 bg-amber-950/10 hover:border-amber-500/50"
+                            : "border-slate-800 hover:border-indigo-500/40"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center space-x-3.5">
+                            <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
+                              {getCategoryIcon(report.category)}
+                            </div>
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <h3 className="text-sm font-bold text-white capitalize">
+                                  {report.category.replace("_", " ")} Issue
+                                </h3>
+                                {getStatusBadge(report.status)}
+                              </div>
+                              <span className="text-[11px] text-slate-400 font-mono">
+                                Reporter: {report.reporter_name || user.name || "Resident"}
+                              </span>
+                            </div>
                           </div>
-                          <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
-                            {report.description}
-                          </p>
-                          <div className="flex items-center space-x-3 mt-1 text-[11px] text-slate-500">
-                            <span className="flex items-center">
-                              <MapPin className="h-3 w-3 mr-1 text-slate-500" />
-                              {report.location_name || `${report.lat.toFixed(3)}, ${report.lng.toFixed(3)}`}
-                            </span>
-                            <span>•</span>
-                            <span className="flex items-center">
-                              <Clock className="h-3 w-3 mr-1 text-slate-500" />
-                              {new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
+                          <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition" />
                         </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition" />
-                    </Link>
-                  ))}
+
+                        <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                          &ldquo;{report.description}&rdquo;
+                        </p>
+
+                        {/* Side-by-Side Thumbnail Preview if Approved */}
+                        {isApproved && (report.before_photo || report.evidence_refs?.[0] || report.after_photo) && (
+                          <div className="pt-1">
+                            <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider block mb-1.5">
+                              ✓ Verified Before & After Proof:
+                            </span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="relative h-20 rounded-lg overflow-hidden border border-slate-800 bg-slate-950">
+                                <img
+                                  src={report.before_photo || report.evidence_refs?.[0] || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600"}
+                                  alt="Before fix"
+                                  className="h-full w-full object-cover"
+                                />
+                                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-slate-950/80 text-[8px] font-mono text-rose-300">
+                                  Before
+                                </span>
+                              </div>
+                              <div className="relative h-20 rounded-lg overflow-hidden border border-emerald-500/40 bg-slate-950">
+                                <img
+                                  src={report.after_photo || "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=600"}
+                                  alt="After fix"
+                                  className="h-full w-full object-cover"
+                                />
+                                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-emerald-950/80 text-[8px] font-mono text-emerald-300 border border-emerald-500/40">
+                                  After (Approved)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-800/60 text-[11px] text-slate-500">
+                          <span className="flex items-center">
+                            <MapPin className="h-3 w-3 mr-1 text-slate-500" />
+                            {report.location_name || `${report.lat.toFixed(3)}, ${report.lng.toFixed(3)}`}
+                          </span>
+                          <span className="flex items-center font-mono">
+                            <Clock className="h-3 w-3 mr-1 text-slate-500" />
+                            {new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
             </div>

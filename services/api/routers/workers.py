@@ -29,19 +29,35 @@ def _to_mission_detail(m: Dict[str, Any]) -> MissionDetail:
         report_ids = [m.get("reportId")]
     
     # If photo or description missing on mission, backfill from linked report
-    photo = m.get("photoEvidence")
+    photo = m.get("photoEvidence") or m.get("beforePhoto")
     desc = m.get("description")
     loc = m.get("location")
     coords = m.get("coordinates")
-    if not photo or not desc or not loc:
-        if report_ids:
-            rep = Database.get_report(report_ids[0])
-            if rep:
-                photo = photo or (rep.get("evidenceRefs", [None])[0] if rep.get("evidenceRefs") else None)
-                desc = desc or rep.get("description")
-                loc = loc or rep.get("locationName")
-                if not coords and "lat" in rep and "lng" in rep:
-                    coords = {"lat": rep["lat"], "lng": rep["lng"]}
+    reporter_name = m.get("reporterName")
+    reporter_id = m.get("reporterId")
+    after_photo = m.get("afterPhoto") or (m.get("proofOfRepair", {}).get("afterPhoto") if isinstance(m.get("proofOfRepair"), dict) else None)
+    technician_notes = m.get("technicianNotes") or (m.get("proofOfRepair", {}).get("notes") if isinstance(m.get("proofOfRepair"), dict) else None)
+    controller_approved_at = m.get("controllerApprovedAt")
+    controller_notes = m.get("controllerNotes")
+    ai_analysis = m.get("aiSolution") or m.get("aiRecommendation")
+
+    if report_ids:
+        rep = Database.get_report(report_ids[0])
+        if rep:
+            photo = photo or rep.get("beforePhoto") or (rep.get("evidenceRefs", [None])[0] if rep.get("evidenceRefs") else None)
+            desc = desc or rep.get("description")
+            loc = loc or rep.get("locationName")
+            reporter_name = reporter_name or rep.get("reporterName") or (rep.get("reporterEmail", "").split("@")[0].title() if rep.get("reporterEmail") else "Resident")
+            reporter_id = reporter_id or rep.get("reporterId")
+            after_photo = after_photo or rep.get("afterPhoto") or rep.get("proofPhoto")
+            technician_notes = technician_notes or rep.get("technicianNotes")
+            controller_approved_at = controller_approved_at or rep.get("controllerApprovedAt")
+            controller_notes = controller_notes or rep.get("controllerNotes")
+            if not coords and "lat" in rep and "lng" in rep:
+                coords = {"lat": rep["lat"], "lng": rep["lng"]}
+
+    if not ai_analysis and isinstance(m.get("verificationResult"), dict):
+        ai_analysis = m["verificationResult"].get("explanation")
 
     return MissionDetail(
         mission_id=m["missionId"],
@@ -66,6 +82,14 @@ def _to_mission_detail(m: Dict[str, Any]) -> MissionDetail:
         coordinates=coords,
         description=desc,
         photo_evidence=photo,
+        reporter_name=reporter_name or "Resident",
+        reporter_id=reporter_id,
+        before_photo=photo,
+        after_photo=after_photo,
+        technician_notes=technician_notes,
+        ai_analysis=ai_analysis,
+        controller_approved_at=controller_approved_at,
+        controller_notes=controller_notes,
         risk_score=m.get("riskScore", m.get("priority", 50)),
         proof_of_repair=m.get("proofOfRepair"),
         verification_result=m.get("verificationResult"),
@@ -327,6 +351,13 @@ def reject_mission(
     m["version"] = m.get("version", 1) + 1
     Database.save_mission(m)
 
+    for rep_id in m.get("reportIds", [m.get("reportId")]):
+        if rep_id:
+            rep = Database.get_report(rep_id)
+            if rep:
+                rep["status"] = "PENDING"
+                Database.save_report(rep)
+
     Database.record_event(
         mission_id=mission_id,
         event_type="TECHNICIAN_REJECTED",
@@ -521,19 +552,52 @@ def submit_mission_completion(
         if rep and rep.get("evidenceRefs"):
             before_photo = rep["evidenceRefs"][0]
 
+    after_photo = payload.after_photo_ref
+    if after_photo and after_photo.startswith("data:image/"):
+        try:
+            import base64
+            import boto3
+            header, encoded = after_photo.split(",", 1) if "," in after_photo else ("", after_photo)
+            image_bytes = base64.b64decode(encoded)
+            bucket_name = os.getenv("S3_EVIDENCE_BUCKET", "repairgrid-evidence-011528288924-us-east-1")
+            ext = "png" if "png" in header else "webp" if "webp" in header else "jpg"
+            file_key = f"missions/{mission_id}/after/{uuid.uuid4().hex[:8]}.{ext}"
+            s3 = boto3.client("s3", region_name=os.getenv("AWS_REGION", "us-east-1"))
+            s3.put_object(
+                Bucket=bucket_name,
+                Key=file_key,
+                Body=image_bytes,
+                ContentType="image/jpeg" if ext == "jpg" else f"image/{ext}"
+            )
+            try:
+                after_photo = s3.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": bucket_name, "Key": file_key},
+                    ExpiresIn=604800
+                )
+            except Exception as sign_err:
+                print(f"Worker presign url error: {sign_err}")
+                after_photo = f"https://{bucket_name}.s3.amazonaws.com/{file_key}"
+        except Exception as upload_err:
+            print(f"Worker after photo S3 upload failed: {upload_err}")
+
     proof = {
         "beforePhoto": before_photo,
-        "afterPhoto": payload.after_photo_ref,
+        "afterPhoto": after_photo,
         "outcome": payload.outcome.value,
         "notes": payload.notes,
+        "voiceTranscript": payload.voice_transcript,
         "materialsUsed": payload.materials_used or [],
         "technicianId": worker_id,
         "technicianName": worker_name,
         "submittedAt": Database.now_iso()
     }
 
-    m["status"] = MissionStatus.PROOF_SUBMITTED.value
+    m["status"] = MissionStatus.READY_FOR_REVIEW.value
+    m["verificationStatus"] = "READY_FOR_REVIEW"
     m["proofOfRepair"] = proof
+    m["afterPhoto"] = after_photo
+    m["technicianNotes"] = payload.notes
     m["completionPayload"] = payload.model_dump()
     m["version"] = m.get("version", 1) + 1
 
@@ -549,9 +613,9 @@ def submit_mission_completion(
         if rep_id:
             rep = Database.get_report(rep_id)
             if rep:
-                rep["status"] = "PROOF_SUBMITTED"
-                rep["proofPhoto"] = payload.after_photo_ref
-                rep["afterPhoto"] = payload.after_photo_ref
+                rep["status"] = "READY_FOR_REVIEW"
+                rep["proofPhoto"] = after_photo
+                rep["afterPhoto"] = after_photo
                 rep["technicianNotes"] = payload.notes
                 Database.save_report(rep)
             Database.record_event(
@@ -575,17 +639,11 @@ def submit_mission_completion(
             confidence = max(0.0, min(1.0, float(nova.get("confidence", 0.0))))
             improved = bool(nova.get("conditionImproved", False))
             same_asset = bool(nova.get("sameAsset", False))
-            if improved and same_asset and confidence >= 0.90 and risk_band != RiskBand.CRITICAL:
-                recommendation = "CLOSE"
-            elif not improved or not same_asset:
-                recommendation = "REPLAN_REOPEN"
-            else:
-                recommendation = "OPERATOR_REVIEW"
             verification_result = {
                 "conditionImproved": improved,
                 "confidence": confidence,
-                "recommendation": recommendation,
-                "explanation": nova.get("summary", "Amazon Nova compared the submitted evidence."),
+                "recommendation": "OPERATOR_REVIEW",
+                "explanation": nova.get("summary", "Amazon Nova compared the resident intake vs technician proof."),
                 "sameLocation": True,
                 "sameAsset": same_asset,
                 "evidenceQuality": nova.get("evidenceQuality", 0.0),
@@ -607,7 +665,7 @@ def submit_mission_completion(
             verification_result = {
                 "conditionImproved": v.condition_improved,
                 "confidence": v.confidence,
-                "recommendation": v.recommendation,
+                "recommendation": "OPERATOR_REVIEW",
                 "explanation": v.explanation,
                 "sameLocation": v.same_location,
                 "sameAsset": v.same_asset,
@@ -616,42 +674,20 @@ def submit_mission_completion(
                 "verifiedAt": Database.now_iso(),
             }
         m["verificationResult"] = verification_result
-
-        if verification_result["recommendation"] == "CLOSE":
-            m["status"] = MissionStatus.VERIFIED.value
-            m["verificationStatus"] = "VERIFIED"
-            for rep_id in m.get("reportIds", [m.get("reportId")]):
-                if rep_id:
-                    rep = Database.get_report(rep_id)
-                    if rep:
-                        rep["status"] = "VERIFIED"
-                        Database.save_report(rep)
-            Database.record_event(
-                mission_id=mission_id,
-                event_type="AI_VERIFICATION_PASSED" if verification_result["verificationMode"] == "AMAZON_BEDROCK" else "LOCAL_POLICY_VERIFICATION_PASSED",
-                actor_type="AGENT",
-                actor_id="NovaVisionAgent" if verification_result["verificationMode"] == "AMAZON_BEDROCK" else "LocalVerificationPolicy",
-                payload=verification_result
-            )
-        else:
-            m["verificationStatus"] = "OPERATOR_REVIEW"
+        Database.record_event(
+            mission_id=mission_id,
+            event_type="AI_VERIFICATION_EVALUATED",
+            actor_type="AGENT",
+            actor_id="NovaVisionAgent" if verification_result["verificationMode"] == "AMAZON_BEDROCK" else "LocalVerificationPolicy",
+            payload=verification_result
+        )
     except (BedrockUnavailable, Exception) as e:
-        # Verification failures must fail safe. A technician submission is never
-        # silently promoted to a verified repair.
-        m["verificationStatus"] = "OPERATOR_REVIEW"
         m["verificationResult"] = {
             "conditionImproved": False,
             "confidence": 0.0,
             "recommendation": "OPERATOR_REVIEW",
-            "explanation": f"Automated verification was unavailable: {str(e)}"
+            "explanation": f"Automated verification note: {str(e)}"
         }
-        Database.record_event(
-            mission_id=mission_id,
-            event_type="AI_VERIFICATION_UNAVAILABLE",
-            actor_type="SYSTEM",
-            actor_id="VerificationService",
-            payload={"recommendation": "OPERATOR_REVIEW", "reason": str(e)},
-        )
 
     Database.save_mission(m)
 
@@ -660,7 +696,9 @@ def submit_mission_completion(
         if rep_id:
             rep = Database.get_report(rep_id)
             if rep:
-                rep["status"] = m["status"]
+                rep["status"] = "READY_FOR_REVIEW"
+                rep["afterPhoto"] = payload.after_photo_ref
+                rep["technicianNotes"] = payload.notes
                 Database.save_report(rep)
 
     return {"status": m["status"], "missionId": mission_id, "verification": m.get("verificationResult")}

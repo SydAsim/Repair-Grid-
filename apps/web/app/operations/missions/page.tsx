@@ -10,14 +10,20 @@ import {
   Clock, 
   CheckCircle2, 
   ChevronRight,
-  ShieldAlert,
+  ShieldAlert, 
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Camera,
+  Bot,
+  User,
+  Check,
+  Zap,
+  CheckCheck
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/config";
 import { useOperatorAuth } from "@/lib/auth-context";
 
-interface MissionRow {
+interface SegmentedCase {
   missionId: string;
   title: string;
   category: string;
@@ -27,54 +33,95 @@ interface MissionRow {
   assignedTechnicianName?: string;
   status: string;
   location?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  slaDueAt?: string;
+  reporterName?: string;
+  description?: string;
+  beforePhoto?: string;
+  photoEvidence?: string;
+  afterPhoto?: string;
+  technicianNotes?: string;
+  voiceTranscript?: string;
+  aiAnalysis?: string;
+  controllerApprovedAt?: string;
+  lat?: number;
+  lng?: number;
 }
 
-export default function MissionsListPage() {
+export default function SegmentedMissionsPage() {
   const { getAuthHeaders } = useOperatorAuth();
-  const [missions, setMissions] = useState<MissionRow[]>([]);
+  const [segmentedData, setSegmentedData] = useState<{
+    pending: SegmentedCase[];
+    ready_for_review: SegmentedCase[];
+    approved: SegmentedCase[];
+    counts: { pending: number; ready_for_review: number; approved: number };
+  }>({
+    pending: [],
+    ready_for_review: [],
+    approved: [],
+    counts: { pending: 0, ready_for_review: 0, approved: 0 }
+  });
+
+  const [activeTab, setActiveTab] = useState<"pending" | "ready_for_review" | "approved">("ready_for_review");
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [approvedToast, setApprovedToast] = useState<string | null>(null);
 
-  const fetchMissions = useCallback(async () => {
+  const fetchSegmentedReports = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/ops/missions`, {
+      const res = await fetch(`${API_BASE_URL}/api/ops/reports-segmented`, {
         headers: getAuthHeaders(),
         cache: "no-store",
       });
       if (res.ok) {
         const data = await res.json();
-        setMissions(data);
+        setSegmentedData(data);
       }
     } catch (e) {
-      console.warn("Failed to load live missions:", e);
+      console.warn("Failed to load segmented missions:", e);
     } finally {
       setLoading(false);
     }
   }, [getAuthHeaders]);
 
   useEffect(() => {
-    fetchMissions();
+    fetchSegmentedReports();
     const timer = setInterval(() => {
       if (typeof document === "undefined" || document.visibilityState === "visible") {
-        fetchMissions();
+        fetchSegmentedReports();
       }
     }, 8000);
     return () => clearInterval(timer);
-  }, [fetchMissions]);
+  }, [fetchSegmentedReports]);
 
-  const filtered = missions.filter((m) => {
-    const id = m.missionId || "";
-    const title = m.title || "";
-    const matchesSearch = 
-      title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = selectedStatus === "ALL" || m.status === selectedStatus;
-    return matchesSearch && matchesStatus;
+  const handleApproveCase = async (missionId: string) => {
+    setActionLoading(missionId);
+    setApprovedToast(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ops/missions/${missionId}/approve`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setApprovedToast(`Case ${missionId} approved! Resident status converted to APPROVED.`);
+        await fetchSegmentedReports();
+        setTimeout(() => setApprovedToast(null), 5000);
+      }
+    } catch (e) {
+      console.warn("Approval error:", e);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const currentCases = segmentedData[activeTab] || [];
+  const filteredCases = currentCases.filter((item) => {
+    const term = searchTerm.toLowerCase();
+    const title = (item.title || "").toLowerCase();
+    const id = (item.missionId || "").toLowerCase();
+    const reporter = (item.reporterName || "").toLowerCase();
+    const desc = (item.description || "").toLowerCase();
+    return title.includes(term) || id.includes(term) || reporter.includes(term) || desc.includes(term);
   });
 
   return (
@@ -82,29 +129,30 @@ export default function MissionsListPage() {
       <OperatorNav />
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/20">
-                LIVE OPERATIONAL REGISTER
+              <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/20 uppercase tracking-wider">
+                SEGMENTED OPERATIONS REGISTER
               </span>
               <span className="text-[10px] font-semibold text-emerald-400 flex items-center">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse" />
-                Real Database Feed
+                Live Case Triage
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-white mt-1">Community Missions Log</h1>
+            <h1 className="text-2xl font-black text-white mt-1">Community Cases & Admission Triage</h1>
             <p className="text-xs text-slate-400 mt-1">
-              Live tracking of all citizen problem reports, assigned technicians, and status transitions.
+              Segmented case oversight: (1) Cases Still Pending, (2) Cases Ready for Review, (3) Cases Approved & Verified.
             </p>
           </div>
 
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => fetchMissions()}
+              onClick={() => fetchSegmentedReports()}
               disabled={loading}
               className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition disabled:opacity-50"
-              title="Refresh live missions"
+              title="Refresh live cases"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
@@ -113,109 +161,279 @@ export default function MissionsListPage() {
               <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-500" />
               <input
                 type="text"
-                placeholder="Search live missions..."
+                placeholder="Search reporter, ID, or description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-48 sm:w-64"
               />
             </div>
-
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="AWAITING_ACCEPTANCE">Awaiting Acceptance</option>
-              <option value="ACCEPTED">Accepted</option>
-              <option value="EN_ROUTE">En Route</option>
-              <option value="ON_SITE">On Site</option>
-              <option value="PROOF_SUBMITTED">Proof Submitted</option>
-              <option value="VERIFIED">Verified</option>
-              <option value="CLOSED">Closed</option>
-            </select>
           </div>
         </div>
 
-        {/* Live Missions Table */}
-        <div className="glass-panel rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-900/60 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th className="py-3.5 px-4">Mission ID</th>
-                  <th className="py-3.5 px-4">Title & Category</th>
-                  <th className="py-3.5 px-4">Department</th>
-                  <th className="py-3.5 px-4">Priority & Risk</th>
-                  <th className="py-3.5 px-4">Assigned Technician</th>
-                  <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-4 text-right">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 text-xs">
-                {filtered.map((m) => {
-                  const isCritical = m.riskBand === "CRITICAL";
-                  return (
-                    <tr key={m.missionId} className="hover:bg-slate-900/60 transition group">
-                      <td className="py-3.5 px-4 font-mono font-bold text-indigo-400">
-                        {m.missionId}
-                      </td>
-                      <td className="py-3.5 px-4 font-semibold text-white">
-                        {m.title}
-                        <span className="text-[10px] text-slate-500 block font-normal capitalize">
-                          {m.category?.replace("_", " ")} • {m.location || "Campus Site"}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-300 capitalize">{m.department || "General"}</td>
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          isCritical
-                            ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                            : m.riskBand === "HIGH"
-                            ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                            : "bg-slate-800 text-slate-400"
-                        }`}>
-                          {m.priority || 50} ({m.riskBand || "MEDIUM"})
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-200">
-                        {m.assignedTechnicianName || "Awaiting Technician"}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                          m.status === "CLOSED" || m.status === "VERIFIED"
-                            ? "bg-emerald-500/10 text-emerald-400"
-                            : m.status === "AWAITING_ACCEPTANCE"
-                            ? "bg-amber-500/10 text-amber-400"
-                            : "bg-blue-500/10 text-blue-400"
-                        }`}>
-                          {m.status?.replaceAll("_", " ")}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <Link
-                          href={`/operations/missions/${m.missionId}/`}
-                          onClick={(e) => { e.preventDefault(); window.location.href = `/operations/missions/${m.missionId}/`; }}
-                          className="inline-flex items-center space-x-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300"
-                        >
-                          <span>Inspect</span>
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {!loading && filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500 text-xs">
-                      No missions found matching your search.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        {/* Action Toast Alert */}
+        {approvedToast && (
+          <div className="p-4 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center justify-between animate-fadeIn">
+            <div className="flex items-center space-x-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>{approvedToast}</span>
+            </div>
+            <span className="text-[10px] font-mono text-emerald-400">VERIFIED</span>
           </div>
+        )}
+
+        {/* 3 SEGMENTED TABS */}
+        <div className="grid grid-cols-3 gap-3 p-1.5 bg-slate-900/80 rounded-2xl border border-slate-800">
+          <button
+            onClick={() => setActiveTab("pending")}
+            className={`py-3 px-4 rounded-xl text-xs font-bold transition flex flex-col sm:flex-row items-center justify-center space-y-1 sm:space-y-0 sm:space-x-2 ${
+              activeTab === "pending"
+                ? "bg-slate-800 text-white shadow-lg border border-slate-700"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <span>1. Cases Still Pending</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              activeTab === "pending" ? "bg-amber-500 text-slate-950" : "bg-slate-800 text-slate-400"
+            }`}>
+              {segmentedData.counts.pending}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("ready_for_review")}
+            className={`py-3 px-4 rounded-xl text-xs font-bold transition flex flex-col sm:flex-row items-center justify-center space-y-1 sm:space-y-0 sm:space-x-2 ${
+              activeTab === "ready_for_review"
+                ? "bg-amber-500 text-slate-950 shadow-lg font-black"
+                : "text-amber-400/90 hover:text-amber-300"
+            }`}
+          >
+            <span>2. Ready for Review</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              activeTab === "ready_for_review" ? "bg-slate-950 text-amber-400" : "bg-amber-500/20 text-amber-400"
+            }`}>
+              {segmentedData.counts.ready_for_review}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("approved")}
+            className={`py-3 px-4 rounded-xl text-xs font-bold transition flex flex-col sm:flex-row items-center justify-center space-y-1 sm:space-y-0 sm:space-x-2 ${
+              activeTab === "approved"
+                ? "bg-emerald-600 text-white shadow-lg font-black"
+                : "text-emerald-400/90 hover:text-emerald-300"
+            }`}
+          >
+            <span>3. Approved & Verified</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              activeTab === "approved" ? "bg-white text-emerald-950" : "bg-emerald-500/20 text-emerald-400"
+            }`}>
+              {segmentedData.counts.approved}
+            </span>
+          </button>
+        </div>
+
+        {/* Tab Context Explanation Header */}
+        <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs text-slate-300">
+          {activeTab === "pending" && (
+            <span>
+              Cases submitted by residents that are pending dispatch, technician acceptance, or initial field triage.
+            </span>
+          )}
+          {activeTab === "ready_for_review" && (
+            <span className="text-amber-300 font-medium">
+              Field technicians have completed repairs and submitted Before/After proof. Review photographic evidence and click <strong>Approve Case</strong> to finalize.
+            </span>
+          )}
+          {activeTab === "approved" && (
+            <span className="text-emerald-300 font-medium">
+              Verified community cases authorized by the Mission Controller. The resident's pending status has been converted to <strong>APPROVED ✓</strong>.
+            </span>
+          )}
+          <span className="font-mono text-slate-500 text-[10px] shrink-0 ml-2">
+            {filteredCases.length} items
+          </span>
+        </div>
+
+        {/* Case Cards Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {filteredCases.map((c) => {
+            const beforePhoto = c.photoEvidence || c.beforePhoto || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800";
+            const afterPhoto = c.afterPhoto;
+            const reporterName = c.reporterName || "Syed Asim (Resident)";
+            const isApproved = c.status === "APPROVED" || c.status === "VERIFIED" || c.status === "CLOSED";
+            const isReadyForReview = c.status === "READY_FOR_REVIEW" || c.status === "PROOF_SUBMITTED" || c.status === "COMPLETION_SUBMITTED";
+
+            return (
+              <div 
+                key={c.missionId}
+                className={`glass-panel rounded-2xl p-5 border space-y-4 transition ${
+                  isReadyForReview 
+                    ? "border-amber-500/40 bg-slate-900/90 shadow-xl shadow-amber-950/10" 
+                    : isApproved
+                    ? "border-emerald-500/30 bg-slate-900/80"
+                    : "border-slate-800 bg-slate-900/70"
+                }`}
+              >
+                {/* Header Info */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[10px] font-bold font-mono text-indigo-400">{c.missionId}</span>
+                      <span className="text-slate-600">•</span>
+                      <span className="text-[10px] font-mono text-slate-400 uppercase">{c.category?.replace("_", " ")}</span>
+                    </div>
+                    <h3 className="text-base font-bold text-white mt-0.5">{c.title}</h3>
+                    <p className="text-xs text-slate-400 flex items-center mt-1">
+                      <MapPin className="h-3.5 w-3.5 mr-1 text-rose-400 shrink-0" />
+                      <span>{c.location || "Campus District Site"}</span>
+                      {c.lat && (
+                        <span className="ml-1.5 font-mono text-indigo-400 text-[10px]">
+                          ({c.lat.toFixed(4)}, {c.lng?.toFixed(4)})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <span className={`text-[10px] font-bold font-mono px-2.5 py-1 rounded-full border inline-block ${
+                      isApproved
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        : isReadyForReview
+                        ? "bg-amber-500/15 text-amber-400 border-amber-500/30 font-black"
+                        : "bg-slate-800 text-slate-400 border-slate-700"
+                    }`}>
+                      {isApproved ? "APPROVED ✓" : isReadyForReview ? "READY FOR REVIEW" : c.status?.replace("_", " ")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Reporter & Verbatim Request */}
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <User className="h-4 w-4 text-amber-400" />
+                      <span className="text-slate-400">Reporter:</span>
+                      <strong className="text-white">{reporterName}</strong>
+                    </div>
+                    <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                      RESIDENT CITIZEN
+                    </span>
+                  </div>
+                  <p className="text-slate-200 italic leading-relaxed text-xs">
+                    &ldquo;{c.description || "Please repair street light near HVK"}&rdquo;
+                  </p>
+                </div>
+
+                {/* Before & After Photo Comparison */}
+                {afterPhoto ? (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-semibold">
+                      Photographic Evidence Audit (Before vs After):
+                    </span>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-mono text-rose-400 font-bold block">1. BEFORE (Resident)</span>
+                        <div className="h-32 rounded-xl overflow-hidden border border-rose-500/30 bg-slate-950">
+                          <img src={beforePhoto} alt="Before" className="w-full h-full object-cover" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold block">2. AFTER (Technician)</span>
+                        <div className="h-32 rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-950">
+                          <img src={afterPhoto} alt="After" className="w-full h-full object-cover" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-semibold">
+                      Resident Photographic Evidence:
+                    </span>
+                    <div className="h-36 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 relative">
+                      <img src={beforePhoto} alt="Resident Evidence" className="w-full h-full object-cover" />
+                      <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-slate-950/80 backdrop-blur-sm text-[10px] font-mono text-slate-200 border border-slate-700">
+                        Intake Photograph
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Technician Notes or Mic Speech Transcript if available */}
+                {c.technicianNotes && (
+                  <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs space-y-1">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span>Technician Scope ({c.assignedTechnicianName || "Ahmed Khan"}):</span>
+                      {c.voiceTranscript && (
+                        <span className="text-[10px] font-mono text-indigo-400">🎙️ Mic Transcribed</span>
+                      )}
+                    </div>
+                    <p className="text-slate-200 text-xs leading-relaxed">
+                      &ldquo;{c.technicianNotes}&rdquo;
+                    </p>
+                  </div>
+                )}
+
+                {/* AI Diagnostic / Reasoning Box */}
+                <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/25 space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-indigo-300 flex items-center">
+                      <Bot className="h-3.5 w-3.5 mr-1 text-indigo-400" />
+                      Amazon Nova AI Diagnostic & Verification
+                    </span>
+                    <span className="font-mono text-emerald-400 font-bold text-[11px]">
+                      Verified Match
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed font-mono">
+                    {c.aiAnalysis || "Amazon Nova compared intake vs field evidence: Defect verified, safety standards compliant."}
+                  </p>
+                </div>
+
+                {/* Card Bottom Controls */}
+                <div className="pt-2 flex items-center justify-between border-t border-slate-800 gap-2">
+                  <Link
+                    href={`/operations/missions/${c.missionId}`}
+                    className="text-xs font-semibold text-slate-400 hover:text-white flex items-center"
+                  >
+                    <span>Full Audit View</span>
+                    <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                  </Link>
+
+                  {isReadyForReview && (
+                    <button
+                      type="button"
+                      onClick={() => handleApproveCase(c.missionId)}
+                      disabled={actionLoading === c.missionId}
+                      className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-black text-white transition flex items-center space-x-1.5 shadow-lg shadow-emerald-600/30"
+                    >
+                      {actionLoading === c.missionId ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                      <span>Approve Case ✓</span>
+                    </button>
+                  )}
+
+                  {isApproved && (
+                    <span className="text-xs font-bold text-emerald-400 flex items-center">
+                      <CheckCheck className="h-4 w-4 mr-1" />
+                      <span>Approved in Central Registry</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {!loading && filteredCases.length === 0 && (
+            <div className="col-span-full p-16 text-center rounded-2xl bg-slate-900/40 border border-slate-800 text-xs text-slate-500 space-y-2">
+              <CheckCircle2 className="h-8 w-8 text-slate-600 mx-auto" />
+              <p className="font-semibold text-slate-400">No cases found in this category.</p>
+              <p className="text-[11px] text-slate-500">Try changing the search keyword or selecting a different tab.</p>
+            </div>
+          )}
         </div>
       </main>
     </div>

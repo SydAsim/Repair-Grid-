@@ -50,6 +50,19 @@ type Mission = {
   photoEvidence?: string;
   ai_solution?: string;
   required_skill?: string;
+  reporter_name?: string;
+  reporterName?: string;
+  before_photo?: string;
+  beforePhoto?: string;
+  after_photo?: string;
+  afterPhoto?: string;
+  technician_notes?: string;
+  technicianNotes?: string;
+  voice_transcript?: string;
+  voiceTranscript?: string;
+  controller_approved_at?: string;
+  controllerApprovedAt?: string;
+  coordinates?: { lat: number; lng: number };
 };
 
 type WorkerNotification = {
@@ -630,8 +643,13 @@ export default function WorkerHomePage() {
                   <span className="text-[10px] font-bold text-slate-400 font-mono">MISSION {nextMission.mission_id}</span>
                   <h3 className="text-lg font-bold text-white mt-0.5">{nextMission.title}</h3>
                   <p className="text-xs text-slate-400 flex items-center mt-1">
-                    <MapPin className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                    <MapPin className="h-3.5 w-3.5 mr-1 text-rose-400" />
                     {nextMission.location || "Location supplied with report"}
+                    {nextMission.coordinates && (
+                      <span className="ml-1.5 font-mono text-indigo-400 text-[10px]">
+                        ({nextMission.coordinates.lat.toFixed(4)}, {nextMission.coordinates.lng.toFixed(4)})
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
@@ -639,24 +657,103 @@ export default function WorkerHomePage() {
                 </div>
               </div>
 
+              {/* Verified Reporter Information */}
+              <div className="flex items-center justify-between bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 text-xs">
+                <div className="flex items-center space-x-2">
+                  <User className="h-4 w-4 text-amber-400 shrink-0" />
+                  <span className="text-slate-400">Reporter:</span>
+                  <span className="font-bold text-white">
+                    {nextMission.reporter_name || nextMission.reporterName || "Syed Asim (Resident Citizen)"}
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold">
+                  CITIZEN SUBMISSION
+                </span>
+              </div>
+
+              {/* Status Banner when Approved or Under Review */}
+              {(nextMission.status === "APPROVED" || nextMission.status === "VERIFIED" || nextMission.status === "CLOSED") && (
+                <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-between text-xs text-emerald-300">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                    <div>
+                      <span className="font-bold block text-white">CASE APPROVED BY MISSION CONTROLLER ✓</span>
+                      <span className="text-[11px] text-emerald-400">
+                        Work verified and closed out across resident & central registry.
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
+                    APPROVED ✓
+                  </span>
+                </div>
+              )}
+
+              {(nextMission.status === "READY_FOR_REVIEW" || nextMission.status === "PROOF_SUBMITTED") && (
+                <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-between text-xs text-amber-300">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="h-5 w-5 text-amber-400 shrink-0" />
+                    <div>
+                      <span className="font-bold block text-white">UNDER ADMISSION CONTROLLER REVIEW</span>
+                      <span className="text-[11px] text-amber-400">
+                        Technician proof submitted. Awaiting Before/After photo sign-off.
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold">
+                    REVIEW PENDING
+                  </span>
+                </div>
+              )}
+
               {/* Citizen Description & Photo Evidence */}
               <div className="space-y-2">
-                <p className="text-xs text-slate-300 bg-slate-950/80 p-3 rounded-xl border border-slate-800 leading-relaxed">
-                  &ldquo;{nextMission.description || "Review reported defect and execute authorized physical repair scope."}&rdquo;
-                </p>
-
-                {/* Picture submitted by citizen */}
-                <div className="relative h-44 w-full rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
-                  <img 
-                    src={nextMission.photo_evidence || nextMission.photoEvidence || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800"} 
-                    alt="Citizen Reported Issue" 
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute top-2 left-2 px-2.5 py-1 rounded-md bg-slate-950/80 backdrop-blur-sm border border-slate-700 text-[10px] font-mono text-slate-200 flex items-center space-x-1.5">
-                    <Camera className="h-3 w-3 text-indigo-400" />
-                    <span>Resident Photographic Evidence</span>
-                  </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block font-semibold mb-1">
+                    Exact Resident Complaint / Brief:
+                  </span>
+                  <p className="text-xs text-slate-100 bg-slate-950/80 p-3 rounded-xl border border-slate-800 leading-relaxed font-medium">
+                    &ldquo;{nextMission.description || "Please repair street light near HVK"}&rdquo;
+                  </p>
                 </div>
+
+                {/* Picture comparison or single photo */}
+                {nextMission.after_photo || nextMission.afterPhoto ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-mono text-rose-400 font-bold block">1. Before (Resident)</span>
+                      <div className="relative h-36 w-full rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+                        <img 
+                          src={nextMission.photo_evidence || nextMission.photoEvidence || nextMission.before_photo || nextMission.beforePhoto || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800"} 
+                          alt="Citizen Reported Issue" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold block">2. After (Repaired)</span>
+                      <div className="relative h-36 w-full rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-950">
+                        <img 
+                          src={nextMission.after_photo || nextMission.afterPhoto} 
+                          alt="Technician Fixed Issue" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative h-44 w-full rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+                    <img 
+                      src={nextMission.photo_evidence || nextMission.photoEvidence || nextMission.before_photo || nextMission.beforePhoto || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800"} 
+                      alt="Citizen Reported Issue" 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-2 left-2 px-2.5 py-1 rounded-md bg-slate-950/80 backdrop-blur-sm border border-slate-700 text-[10px] font-mono text-slate-200 flex items-center space-x-1.5">
+                      <Camera className="h-3 w-3 text-indigo-400" />
+                      <span>Resident Photographic Evidence</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* AI-Based Solution / Triage Result Box */}
@@ -681,7 +778,7 @@ export default function WorkerHomePage() {
 
               {/* Technician Decision Choice Controls */}
               <div className="pt-2">
-                {nextMission.status === "AWAITING_ACCEPTANCE" ? (
+                {nextMission.status === "AWAITING_ACCEPTANCE" || nextMission.status === "PENDING" ? (
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2.5">
                       <button 
@@ -690,7 +787,7 @@ export default function WorkerHomePage() {
                         className="py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-xs font-bold text-white transition flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-600/25"
                       >
                         <Check className="h-4 w-4" />
-                        <span>{busyMission ? "Accepting..." : "Accept Mission"}</span>
+                        <span>{busyMission ? "Accepting..." : "Accept Case"}</span>
                       </button>
 
                       <button 
@@ -699,7 +796,7 @@ export default function WorkerHomePage() {
                         className="py-3 px-3 rounded-xl bg-slate-800 hover:bg-rose-950/40 border border-slate-700 hover:border-rose-500/50 disabled:opacity-60 text-xs font-bold text-slate-300 hover:text-rose-300 transition flex items-center justify-center space-x-1.5"
                       >
                         <X className="h-4 w-4" />
-                        <span>Decline / Pass</span>
+                        <span>Decline / Reject</span>
                       </button>
                     </div>
 

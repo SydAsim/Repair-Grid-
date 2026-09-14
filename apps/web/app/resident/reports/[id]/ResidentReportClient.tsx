@@ -190,25 +190,27 @@ export default function ResidentReportClient({ id }: { id: string }) {
 
   const getStatusBanner = (status?: string) => {
     switch (status) {
+      case "APPROVED":
       case "CLOSED":
       case "RESOLVED":
         return {
-          badgeText: "Case Verified & Closed",
+          badgeText: "Case Approved by Controller ✓",
           badgeColor: "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800",
-          message: "The repair evidence was reviewed and the case was closed by Operations. Thank you for helping keep our community maintained."
+          message: "The Mission Controller has reviewed the Before and After proof of repair and officially APPROVED the resolution."
         };
-      case "VERIFIED":
-        return {
-          badgeText: "Evidence Review Complete",
-          badgeColor: "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800",
-          message: "The repair evidence passed its automated checks and is awaiting final supervisor sign-off."
-        };
+      case "READY_FOR_REVIEW":
       case "PROOF_SUBMITTED":
       case "COMPLETION_SUBMITTED":
         return {
-          badgeText: "Repair Proof Submitted",
-          badgeColor: "text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 border-purple-300 dark:border-purple-800",
-          message: "The field technician submitted completion evidence. Quality review is now in progress."
+          badgeText: "Awaiting Controller Sign-Off",
+          badgeColor: "text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/60 border-cyan-300 dark:border-cyan-800",
+          message: "Field technician has completed physical work and submitted before/after proof. Mission Controller is actively reviewing."
+        };
+      case "VERIFIED":
+        return {
+          badgeText: "AI Vision Verification Passed",
+          badgeColor: "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800",
+          message: "The repair evidence passed automated checks and is awaiting final controller approval."
         };
       case "REPAIR_IN_PROGRESS":
         return {
@@ -240,12 +242,13 @@ export default function ResidentReportClient({ id }: { id: string }) {
           badgeColor: "text-zinc-700 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 border-zinc-300 dark:border-zinc-700",
           message: "Mission matched and dispatched. Awaiting confirmation from the assigned field technician."
         };
+      case "PENDING":
       case "SUBMITTED":
       default:
         return {
-          badgeText: "Report Ingested",
-          badgeColor: "text-zinc-700 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 border-zinc-300 dark:border-zinc-700",
-          message: "Report received into Strands Graph. Multi-agent triaging, spatial deduplication, and risk scoring in progress."
+          badgeText: "Case Ingested (Pending)",
+          badgeColor: "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800",
+          message: "Report received into Strands Graph. Multi-agent triaging and technician dispatch are in progress."
         };
     }
   };

@@ -21,10 +21,12 @@ class MissionStatus(str, Enum):
     ON_SITE = "ON_SITE"
     REPAIR_IN_PROGRESS = "REPAIR_IN_PROGRESS"
     PROOF_SUBMITTED = "PROOF_SUBMITTED"
+    READY_FOR_REVIEW = "READY_FOR_REVIEW"
     AI_VERIFYING = "AI_VERIFYING"
     VERIFYING = "VERIFYING"
     VERIFIED = "VERIFIED"
     COMMUNITY_CONFIRMATION = "COMMUNITY_CONFIRMATION"
+    APPROVED = "APPROVED"
     CLOSED = "CLOSED"
 
     # Failure / Fallback states
@@ -40,6 +42,7 @@ class MissionStatus(str, Enum):
 
     # Compatibility aliases
     DRAFT = "DRAFT"
+    PENDING = "PENDING"
     DISPATCHED = "DISPATCHED"
     ASSIGNED = "ASSIGNED"
     IN_PROGRESS = "IN_PROGRESS"
@@ -74,6 +77,7 @@ class WorkerCompletionPayload(BaseModel):
     notes: str = Field(min_length=5, max_length=1000)
     after_photo_ref: str = Field(description="S3 reference to after repair photo")
     materials_used: Optional[List[str]] = []
+    voice_transcript: Optional[str] = None
 
 class MissionDetail(BaseModel):
     mission_id: str
@@ -98,6 +102,14 @@ class MissionDetail(BaseModel):
     coordinates: Optional[Dict[str, float]] = None
     description: Optional[str] = None
     photo_evidence: Optional[str] = None
+    reporter_name: Optional[str] = None
+    reporter_id: Optional[str] = None
+    before_photo: Optional[str] = None
+    after_photo: Optional[str] = None
+    technician_notes: Optional[str] = None
+    ai_analysis: Optional[str] = None
+    controller_approved_at: Optional[str] = None
+    controller_notes: Optional[str] = None
     risk_score: Optional[int] = None
     proof_of_repair: Optional[Dict[str, Any]] = None
     verification_result: Optional[Dict[str, Any]] = None

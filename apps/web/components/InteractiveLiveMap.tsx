@@ -34,8 +34,8 @@ import { Badge } from "@/components/ui/badge";
 export interface MapIncident {
   id: string;
   title: string;
-  category: "streetlights" | "potholes" | "blocked_drains";
-  priority: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  category: "streetlights" | "potholes" | "blocked_drains" | string;
+  priority: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | string;
   status: string;
   assignedTo: string;
   eta: string;
@@ -44,6 +44,12 @@ export interface MapIncident {
   lng: number;
   imageUrl?: string;
   reportsCount?: number;
+  reporterName?: string;
+  beforePhoto?: string;
+  afterPhoto?: string;
+  technicianNotes?: string;
+  description?: string;
+  aiAnalysis?: string;
 }
 
 // Default realistic road waypoint route for Campus District
@@ -681,20 +687,50 @@ export function InteractiveLiveMap({
               </div>
             </div>
 
-            {/* Thumbnail Image if available */}
-            {selectedIncident.imageUrl && (
+            {/* Reporter Information if available */}
+            {selectedIncident.reporterName && (
+              <div className="flex items-center justify-between text-[11px] bg-zinc-100 dark:bg-zinc-800/60 p-2 rounded-lg">
+                <span className="text-zinc-500 dark:text-zinc-400">Reporter:</span>
+                <strong className="text-zinc-900 dark:text-white">{selectedIncident.reporterName}</strong>
+              </div>
+            )}
+
+            {/* Thumbnail Images: Before / After comparison if afterPhoto exists, else single */}
+            {selectedIncident.afterPhoto ? (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-mono text-rose-500 font-bold block">1. Before (Resident)</span>
+                  <div className="h-20 w-full rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-black">
+                    <img
+                      src={selectedIncident.beforePhoto || selectedIncident.imageUrl || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600"}
+                      alt="Before Repair"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[9px] font-mono text-emerald-500 font-bold block">2. After (Repaired)</span>
+                  <div className="h-20 w-full rounded-lg overflow-hidden border border-emerald-500/40 bg-black">
+                    <img
+                      src={selectedIncident.afterPhoto}
+                      alt="After Repair"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : selectedIncident.imageUrl || selectedIncident.beforePhoto ? (
               <div className="h-24 w-full rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 relative group">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={selectedIncident.imageUrl}
+                  src={selectedIncident.imageUrl || selectedIncident.beforePhoto}
                   alt={selectedIncident.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute bottom-1.5 left-2 bg-black/70 text-white text-[9px] font-mono px-1.5 py-0.5 rounded backdrop-blur-sm">
-                  {selectedIncident.reportsCount || 3} Citizen Reports
+                  {selectedIncident.reportsCount || 1} Citizen Report
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* Location & Status Info */}
             <div className="space-y-1.5 text-xs">
@@ -706,6 +742,18 @@ export function InteractiveLiveMap({
                 <User className="h-3.5 w-3.5 mr-1.5 text-zinc-500 flex-shrink-0" />
                 <span className="truncate">{selectedIncident.assignedTo}</span>
               </div>
+              {selectedIncident.status && (
+                <div className="flex items-center justify-between text-[11px] pt-0.5">
+                  <span className="text-zinc-500">Status:</span>
+                  <span className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] ${
+                    selectedIncident.status.includes("APPROVED") || selectedIncident.status.includes("VERIFIED")
+                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                      : "bg-indigo-500/10 text-indigo-400"
+                  }`}>
+                    {selectedIncident.status}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* CTA Navigation button */}

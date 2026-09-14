@@ -39,10 +39,10 @@ print("3. Waiting for function update to finish...")
 waiter = client.get_waiter("function_updated")
 waiter.wait(FunctionName=LAMBDA_FUNCTION)
 
-print("4. Updating Lambda environment variables for Nova Pro...")
+print("4. Updating Lambda environment variables for Nova 2 Lite...")
 current_config = client.get_function_configuration(FunctionName=LAMBDA_FUNCTION)
 env_vars = current_config.get("Environment", {}).get("Variables", {})
-env_vars["PRIMARY_MODEL"] = "us.amazon.nova-pro-v1:0"
+env_vars["PRIMARY_MODEL"] = "us.amazon.nova-2-lite-v1:0"
 env_vars["ENABLE_LOCAL_AGENT_MOCK"] = "false"
 env_vars["ENABLE_LIVE_BEDROCK"] = "true"
 
