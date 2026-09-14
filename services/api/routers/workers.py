@@ -139,17 +139,25 @@ def get_my_notifications(
     current_user: AuthenticatedUser = Depends(require_roles(["field_worker", "operator", "admin"])),
 ):
     worker = get_my_profile(current_user)
-    notifs = Database.list_notifications(
+    my_notifs = Database.list_notifications(
         recipient_user_id=current_user.user_id,
         recipient_worker_id=worker.get("workerId"),
         unread_only=unread_only,
     )
-    if not notifs:
-        # All technicians (electricians, plumbers, facilities) share broadcast operational alerts
-        notifs = Database.list_notifications(limit=20)
-        if unread_only:
-            notifs = [n for n in notifs if not n.get("readAt")]
-    return notifs
+    # All technicians (electricians, plumbers, facilities) share broadcast operational alerts
+    broadcast_notifs = Database.list_notifications(limit=30)
+    if unread_only:
+        broadcast_notifs = [n for n in broadcast_notifs if not n.get("readAt")]
+    
+    seen = set()
+    combined = []
+    for n in list(my_notifs) + list(broadcast_notifs):
+        nid = n.get("notificationId")
+        if nid and nid not in seen:
+            seen.add(nid)
+            combined.append(n)
+    combined.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+    return combined
 
 
 @router.post("/me/notifications/{notification_id}/read")
@@ -259,10 +267,10 @@ def get_assigned_missions(current_user: AuthenticatedUser = Depends(require_role
             assigned.append(synthetic_mission)
             seen.add(r_id)
 
-    # Prioritize: incoming offers awaiting acceptance first, then newest
+    # Prioritize: incoming actionable offers/reports first, then newest creation timestamp
+    # All technicians (electricians, plumbers, facilities, new or old accounts) see newest reports at the top
     assigned.sort(key=lambda m: (
-        m.get("status") in ["AWAITING_ACCEPTANCE", "MISSION_CREATED", "PENDING"],
-        m.get("assignedWorkerId") == worker_id or m.get("assignedTechnicianId") == worker_id,
+        m.get("status") in ["AWAITING_ACCEPTANCE", "MISSION_CREATED", "PENDING", "TECHNICIAN_MATCHED", "ASSIGNED"],
         m.get("createdAt", "")
     ), reverse=True)
 

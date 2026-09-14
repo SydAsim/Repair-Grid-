@@ -49,7 +49,8 @@ app.include_router(admin.router, prefix="/api")
 def on_startup():
     try:
         from scripts.seed_demo import seed_campus_district
-        seed_campus_district()
+        from services.api.db import ENABLE_LOCAL_MOCK
+        seed_campus_district(seed_reports=ENABLE_LOCAL_MOCK)
     except Exception as e:
         print(f"Demo seed warning: {e}")
 

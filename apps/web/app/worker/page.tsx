@@ -61,8 +61,11 @@ type Mission = {
   voice_transcript?: string;
   voiceTranscript?: string;
   controller_approved_at?: string;
-  controllerApprovedAt?: string;
   coordinates?: { lat: number; lng: number };
+  created_at?: string;
+  createdAt?: string;
+  updated_at?: string;
+  updatedAt?: string;
 };
 
 type WorkerNotification = {
@@ -195,10 +198,18 @@ export default function WorkerHomePage() {
   };
 
   const unread = notifications.filter((item) => !item.readAt).length;
-  const orderedMissions = useMemo(
-    () => [...missions].sort((a, b) => Number(a.status !== "AWAITING_ACCEPTANCE") - Number(b.status !== "AWAITING_ACCEPTANCE")),
-    [missions]
-  );
+  const orderedMissions = useMemo(() => {
+    const isActionable = (s: string) => ["AWAITING_ACCEPTANCE", "PENDING", "MISSION_CREATED", "TECHNICIAN_MATCHED", "ASSIGNED"].includes(s);
+    return [...missions].sort((a, b) => {
+      const aAct = isActionable(a.status);
+      const bAct = isActionable(b.status);
+      if (aAct && !bAct) return -1;
+      if (!aAct && bAct) return 1;
+      const timeA = new Date(a.created_at || a.createdAt || 0).getTime();
+      const timeB = new Date(b.created_at || b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [missions]);
   const nextMission = orderedMissions[0];
 
   const markRead = async (notificationId: string) => {
@@ -778,7 +789,7 @@ export default function WorkerHomePage() {
 
               {/* Technician Decision Choice Controls */}
               <div className="pt-2">
-                {nextMission.status === "AWAITING_ACCEPTANCE" || nextMission.status === "PENDING" ? (
+                {["AWAITING_ACCEPTANCE", "PENDING", "MISSION_CREATED", "TECHNICIAN_MATCHED", "ASSIGNED"].includes(nextMission.status) ? (
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2.5">
                       <button 

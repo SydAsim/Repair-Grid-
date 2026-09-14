@@ -98,17 +98,23 @@ CAMPUS_WORKERS = [
     },
 ]
 
-def seed_campus_district(force: bool = False) -> int:
-    if not force and not ENABLE_LOCAL_MOCK:
-        existing = Database.get_report("RG-R-101")
-        if existing:
-            return 0
+def seed_campus_district(force: bool = False, seed_reports: bool = None) -> int:
+    if seed_reports is None:
+        seed_reports = ENABLE_LOCAL_MOCK
 
     # 1. Seed workers
     for w in CAMPUS_WORKERS:
         Database.save_worker(w)
 
-    # 2. Seed initial canonical reports & missions
+    if not seed_reports:
+        return len(CAMPUS_WORKERS)
+
+    if not force and not ENABLE_LOCAL_MOCK:
+        existing = Database.get_report("RG-R-101")
+        if existing:
+            return 0
+
+    # 2. Seed initial canonical reports & missions if explicitly requested
     sample_report = {
         "reportId": "RG-R-101",
         "reporterId": "resident-asim-001",
