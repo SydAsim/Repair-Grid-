@@ -107,14 +107,13 @@ export default function WorkerHomePage() {
     if (!user) return;
     const headers = getAuthHeaders();
     try {
-      const [profileResponse, missionResponse, notificationResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/workers/me`, { headers, cache: "no-store" }),
-        fetch(`${API_BASE_URL}/api/missions/assigned`, { headers, cache: "no-store" }),
-        fetch(`${API_BASE_URL}/api/workers/me/notifications`, { headers, cache: "no-store" }),
-      ]);
-
+      const profileResponse = await fetch(`${API_BASE_URL}/api/workers/me`, { headers, cache: "no-store" });
       if (profileResponse.ok) setProfile(await profileResponse.json());
+
+      const missionResponse = await fetch(`${API_BASE_URL}/api/missions/assigned`, { headers, cache: "no-store" });
       if (missionResponse.ok) setMissions(await missionResponse.json());
+
+      const notificationResponse = await fetch(`${API_BASE_URL}/api/workers/me/notifications`, { headers, cache: "no-store" });
       if (notificationResponse.ok) {
         const nextNotifications: WorkerNotification[] = await notificationResponse.json();
         setNotifications(nextNotifications);
@@ -141,7 +140,7 @@ export default function WorkerHomePage() {
         if (typeof document === "undefined" || document.visibilityState === "visible") {
           refresh().catch(() => undefined);
         }
-      }, 8000);
+      }, 12000);
       return () => window.clearInterval(timer);
     }
   }, [user, refresh]);

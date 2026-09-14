@@ -85,7 +85,7 @@ def _json_from_text(text: str) -> Dict[str, Any]:
 
 
 class NovaVisionService:
-    MODEL_ID = os.getenv("PRIMARY_MODEL", "us.amazon.nova-2-lite-v1:0")
+    MODEL_ID = os.getenv("PRIMARY_MODEL", "us.amazon.nova-lite-v1:0")
     REGION = os.getenv("BEDROCK_REGION", os.getenv("AWS_REGION", "us-east-1"))
 
     @classmethod
@@ -105,7 +105,9 @@ class NovaVisionService:
             content.append({"image": {"format": image_format, "source": {"bytes": body}}})
 
         try:
-            response = boto3.client("bedrock-runtime", region_name=cls.REGION).converse(
+            from botocore.config import Config
+            bedrock_config = Config(connect_timeout=3, read_timeout=5, retries={"max_attempts": 1})
+            response = boto3.client("bedrock-runtime", region_name=cls.REGION, config=bedrock_config).converse(
                 modelId=cls.MODEL_ID,
                 system=[{"text": "You are RepairGrid's bounded evidence analyst. Return only valid JSON matching the requested schema. Do not invent facts that are not visually supported."}],
                 messages=[{"role": "user", "content": content}],
