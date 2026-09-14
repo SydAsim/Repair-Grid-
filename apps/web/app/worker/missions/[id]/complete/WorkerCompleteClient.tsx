@@ -64,10 +64,9 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
   const [isListening, setIsListening] = useState(false);
   const [isVoiceRecorded, setIsVoiceRecorded] = useState(false);
   
-  // High quality repaired streetlight photo by default
-  const [afterPhotoUrl, setAfterPhotoUrl] = useState<string | null>(
-    "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop&q=80"
-  );
+  // Technician must upload or take photo themselves (no default)
+  const [afterPhotoUrl, setAfterPhotoUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedStatus, setSubmittedStatus] = useState<any>(null);
@@ -151,9 +150,14 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
   const beforePhoto = mission?.photo_evidence || mission?.photoEvidence || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800";
 
   const handleSubmit = async () => {
+    if (!afterPhotoUrl) {
+      setPhotoError("Photographic proof of repair is mandatory. Please take a photo with your device camera or upload repair evidence before submitting.");
+      return;
+    }
+    setPhotoError(null);
     setIsSubmitting(true);
     const baseUrl = getApiBaseUrl();
-    const photoPayload = afterPhotoUrl || "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800";
+    const photoPayload = afterPhotoUrl;
     const targetId = missionId && missionId !== "default" ? missionId : (id && id !== "default" ? id : "RG-M-DE042E");
     try {
       const res = await fetch(`${baseUrl}/api/missions/${targetId}/completion`, {
@@ -462,61 +466,31 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
                 {/* After Photo Capture & Upload */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold font-mono text-emerald-400 uppercase">
-                      2. After: Completed Repair
+                    <span className="text-[11px] font-bold font-mono text-emerald-400 uppercase flex items-center">
+                      <Camera className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+                      2. After: Completed Repair Proof (Required)
                     </span>
-                    <span className="text-[10px] text-slate-500 font-mono">Technician Proof</span>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {afterPhotoUrl ? "✓ Proof Attached" : "Camera or Upload Required"}
+                    </span>
                   </div>
-                  <div className="relative h-44 rounded-xl overflow-hidden border border-emerald-500/30 bg-slate-950">
-                    {afterPhotoUrl ? (
-                      <img 
-                        src={afterPhotoUrl} 
-                        alt="After Repair" 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 space-y-2">
-                        <Camera className="h-8 w-8 text-slate-600" />
-                        <span className="text-xs">No photo captured yet</span>
-                      </div>
-                    )}
-                    <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-slate-950/80 backdrop-blur-sm text-[10px] font-mono text-emerald-300 border border-emerald-500/30">
-                      Proof of Fix
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              {/* Quick Demo Preset Selector */}
-              <div className="pt-2 border-t border-slate-800/80 space-y-2">
-                <span className="text-[10px] font-mono uppercase text-slate-400 block font-semibold">
-                  Demo Evidence Presets (1-Click Test Scenarios):
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAfterPhotoUrl("https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop&q=80");
-                      setOutcome("REPAIRED");
-                      setNotes("Replaced burned ballast and installed new 150W LED fixture. Luminaire operational and sealed.");
+                  <ImageCaptureUpload
+                    value={afterPhotoUrl}
+                    onChange={(url) => {
+                      setAfterPhotoUrl(url);
+                      if (url) setPhotoError(null);
                     }}
-                    className="p-2.5 rounded-xl bg-slate-950/90 hover:bg-slate-950 border border-emerald-500/40 text-left transition flex flex-col"
-                  >
-                    <span className="text-xs font-bold text-emerald-400">Clean Fix (Pass &ge;95%)</span>
-                    <span className="text-[10px] text-slate-400">Triggers AI Verified &rarr; Case Closed</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAfterPhotoUrl("https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800&auto=format&fit=crop&q=80");
-                      setOutcome("TEMPORARY_REPAIR");
-                      setNotes("Applied safety barrier and interim wiring bypass. Full luminaire armature replacement needed.");
-                    }}
-                    className="p-2.5 rounded-xl bg-slate-950/90 hover:bg-slate-950 border border-amber-500/40 text-left transition flex flex-col"
-                  >
-                    <span className="text-xs font-bold text-amber-400">Partial Fix (Supervisor Review)</span>
-                    <span className="text-[10px] text-slate-400">Triggers AI Flagged &rarr; Human Review</span>
-                  </button>
+                    label="Snap Photo with Camera or Upload File"
+                    categoryHint="streetlights"
+                  />
+
+                  {photoError && (
+                    <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+                      <span>{photoError}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -682,17 +656,33 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
             </div>
 
             {/* Submit Action Button */}
-            <div className="pt-2">
+            <div className="pt-2 space-y-2">
+              {photoError && (
+                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+                  <span>{photoError}</span>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="w-full py-4 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-xs font-extrabold text-white transition flex items-center justify-center space-x-2 shadow-xl shadow-emerald-600/30 group"
+                className={`w-full py-4 px-4 rounded-2xl text-xs font-extrabold text-white transition flex items-center justify-center space-x-2 shadow-xl group ${
+                  !afterPhotoUrl
+                    ? "bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700"
+                    : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30"
+                }`}
               >
                 {isSubmitting ? (
                   <>
                     <RefreshCw className="h-4 w-4 animate-spin" />
                     <span>Analyzing with Amazon Bedrock / Nova Vision...</span>
+                  </>
+                ) : !afterPhotoUrl ? (
+                  <>
+                    <Camera className="h-4 w-4 text-amber-400 animate-pulse" />
+                    <span>Camera / Upload Proof Required to Submit</span>
                   </>
                 ) : (
                   <>
@@ -701,8 +691,8 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
                   </>
                 )}
               </button>
-              <p className="text-[11px] text-slate-500 text-center mt-2">
-                Submissions are recorded in the dispatch log and validated against Amazon Nova multimodal benchmarks.
+              <p className="text-[11px] text-slate-500 text-center mt-1">
+                Technician must capture or upload photo proof directly. Submissions are audited and verified by Amazon Nova.
               </p>
             </div>
           </div>
