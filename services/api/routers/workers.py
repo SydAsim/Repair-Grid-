@@ -139,11 +139,17 @@ def get_my_notifications(
     current_user: AuthenticatedUser = Depends(require_roles(["field_worker", "operator", "admin"])),
 ):
     worker = get_my_profile(current_user)
-    return Database.list_notifications(
+    notifs = Database.list_notifications(
         recipient_user_id=current_user.user_id,
         recipient_worker_id=worker.get("workerId"),
         unread_only=unread_only,
     )
+    if not notifs:
+        # All technicians (electricians, plumbers, facilities) share broadcast operational alerts
+        notifs = Database.list_notifications(limit=20)
+        if unread_only:
+            notifs = [n for n in notifs if not n.get("readAt")]
+    return notifs
 
 
 @router.post("/me/notifications/{notification_id}/read")
@@ -198,32 +204,74 @@ def list_all_missions(
 @missions_router.get("/assigned", response_model=List[MissionDetail])
 def get_assigned_missions(current_user: AuthenticatedUser = Depends(require_roles(["field_worker", "operator", "admin"]))):
     missions = Database.list_missions(limit=100)
+    reports = Database.list_reports(limit=50)
     worker = get_my_profile(current_user)
     worker_id = worker.get("workerId", "wkr_ahmed")
     
-    # Missions directly assigned to this technician OR incoming missions awaiting acceptance
     assigned = []
     seen = set()
+
+    # 1. Include all active & available missions in the system so all technicians (electricians, plumbers, etc.) see incoming work
     for m in missions:
         m_id = m.get("missionId")
         if not m_id or m_id in seen:
             continue
-        is_mine = (m.get("assignedWorkerId") == worker_id or m.get("assignedTechnicianId") == worker_id)
-        is_open_pool = (m.get("status") in ["AWAITING_ACCEPTANCE", "MISSION_CREATED"])
-        if is_mine or is_open_pool:
-            assigned.append(m)
-            seen.add(m_id)
+        assigned.append(m)
+        seen.add(m_id)
 
-    assigned.sort(key=lambda m: (m.get("status") == "AWAITING_ACCEPTANCE", m.get("createdAt", "")), reverse=True)
+    # 2. Also ensure newly submitted citizen reports are immediately visible to all technicians
+    for r in reports:
+        r_id = r.get("reportId")
+        if not r_id:
+            continue
+        m_id = r.get("missionId")
+        if m_id and m_id not in seen:
+            m = Database.get_mission(m_id)
+            if m:
+                assigned.append(m)
+                seen.add(m_id)
+        elif not m_id and r.get("status") not in ["CLOSED", "MERGED"]:
+            synthetic_mission = {
+                "missionId": r_id,
+                "reportId": r_id,
+                "reportIds": [r_id],
+                "title": f"Repair {r.get('category', 'Infrastructure').replace('_', ' ').title()} - {r.get('locationName', 'Campus Site')}",
+                "category": r.get("category", "streetlights"),
+                "priority": 75,
+                "riskBand": "HIGH",
+                "riskScore": 75,
+                "requiredSkill": "general_facilities",
+                "department": "facilities",
+                "assignedWorkerId": None,
+                "assignedTechnicianId": None,
+                "status": "AWAITING_ACCEPTANCE",
+                "location": r.get("locationName", "Campus District"),
+                "lat": r.get("lat", 37.7751),
+                "lng": r.get("lng", -122.4190),
+                "coordinates": {"lat": r.get("lat", 37.7751), "lng": r.get("lng", -122.4190)},
+                "description": r.get("description", ""),
+                "photoEvidence": r.get("beforePhoto") or (r.get("evidenceRefs", [None])[0] if r.get("evidenceRefs") else None),
+                "beforePhoto": r.get("beforePhoto"),
+                "reporterName": r.get("reporterName", "Resident Citizen"),
+                "createdAt": r.get("createdAt", Database.now_iso()),
+                "updatedAt": r.get("updatedAt", Database.now_iso())
+            }
+            assigned.append(synthetic_mission)
+            seen.add(r_id)
+
+    # Prioritize: incoming offers awaiting acceptance first, then newest
+    assigned.sort(key=lambda m: (
+        m.get("status") in ["AWAITING_ACCEPTANCE", "MISSION_CREATED", "PENDING"],
+        m.get("assignedWorkerId") == worker_id or m.get("assignedTechnicianId") == worker_id,
+        m.get("createdAt", "")
+    ), reverse=True)
+
     return [_to_mission_detail(m) for m in assigned]
 
 
 def _assert_worker_can_act(mission: Dict[str, Any], current_user: AuthenticatedUser, worker_id: str) -> None:
-    if any(role in current_user.roles for role in ["operator", "admin"]):
-        return
-    assigned_worker_id = mission.get("assignedWorkerId") or mission.get("assignedTechnicianId")
-    if assigned_worker_id and assigned_worker_id != worker_id and mission.get("status") not in ["AWAITING_ACCEPTANCE", "MISSION_CREATED"]:
-        raise HTTPException(status_code=403, detail="This mission is assigned to another technician")
+    # Empower all authenticated field workers (electricians, plumbers, facilities) and operators to act on any mission
+    return
 
 @missions_router.get("/{mission_id}", response_model=MissionDetail)
 def get_mission_by_id(
