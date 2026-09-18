@@ -270,7 +270,7 @@ export default function ResidentReportClient({ id }: { id: string }) {
     (report as any)?.photoUrl || 
     mission?.photoEvidence || 
     mission?.photo_evidence || 
-    "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800";
+    null;
 
   const afterPhoto = 
     (report as any)?.proofPhoto || 
@@ -279,7 +279,7 @@ export default function ResidentReportClient({ id }: { id: string }) {
     mission?.proofOfRepair?.afterPhotoUrl || 
     mission?.afterPhoto || 
     mission?.proofPhoto || 
-    ((effectiveStatus === "PROOF_SUBMITTED" || effectiveStatus === "VERIFIED" || effectiveStatus === "CLOSED") ? "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800" : null);
+    ((effectiveStatus === "PROOF_SUBMITTED" || effectiveStatus === "VERIFIED" || effectiveStatus === "CLOSED") ? null : null);
 
   const hasTechnicianAssigned = effectiveStatus !== "SUBMITTED" && effectiveStatus !== "GEOCODED" && effectiveStatus !== "TRIAGED";
   const hasProof = !!afterPhoto || effectiveStatus === "PROOF_SUBMITTED" || effectiveStatus === "VERIFIED" || effectiveStatus === "CLOSED";
@@ -431,10 +431,16 @@ export default function ResidentReportClient({ id }: { id: string }) {
                   1. Before (Reported Issue)
                 </span>
                 <div className="h-36 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-950 relative">
-                  <img src={beforePhoto} alt="Issue Before Fix" className="w-full h-full object-cover" />
-                  <span className="absolute bottom-1.5 left-1.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/70 text-zinc-300">
-                    Citizen Intake
-                  </span>
+                  {beforePhoto ? (
+                    <>
+                      <img src={beforePhoto} alt="Issue Before Fix" className="w-full h-full object-cover" />
+                      <span className="absolute bottom-1.5 left-1.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/70 text-zinc-300">
+                        Citizen Intake
+                      </span>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-500 text-[10px] font-mono">No photo available</div>
+                  )}
                 </div>
               </div>
 
@@ -443,10 +449,16 @@ export default function ResidentReportClient({ id }: { id: string }) {
                   2. After (Completed Repair)
                 </span>
                 <div className="h-36 rounded-xl overflow-hidden border border-emerald-500/40 bg-zinc-950 relative">
-                  <img src={afterPhoto || "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800"} alt="Repaired Infrastructure" className="w-full h-full object-cover" />
-                  <span className="absolute bottom-1.5 left-1.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
-                    Technician Proof
-                  </span>
+                  {afterPhoto ? (
+                    <>
+                      <img src={afterPhoto} alt="Repaired Infrastructure" className="w-full h-full object-cover" />
+                      <span className="absolute bottom-1.5 left-1.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
+                        Technician Proof
+                      </span>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-500 text-[10px] font-mono">No photo available</div>
+                  )}
                 </div>
               </div>
             </div>

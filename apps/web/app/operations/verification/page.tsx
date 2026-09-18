@@ -93,8 +93,8 @@ export default function VerificationQueuePage() {
     return true;
   });
 
-  const beforePhoto = selectedMission?.photoEvidence || selectedMission?.beforePhoto || "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800";
-  const afterPhoto = selectedMission?.afterPhoto || selectedMission?.proofOfRepair?.afterPhoto || "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop&q=80";
+  const beforePhoto = selectedMission?.photoEvidence || selectedMission?.beforePhoto || selectedMission?.proofOfRepair?.beforePhoto || null;
+  const afterPhoto = selectedMission?.afterPhoto || selectedMission?.proofOfRepair?.afterPhoto || selectedMission?.proofOfRepair?.afterPhotoUrl || null;
   const reporterName = selectedMission?.reporterName || "Syed Asim (Resident)";
   const technicianName = selectedMission?.assignedTechnicianName || selectedMission?.proofOfRepair?.technicianName || "Ahmed Khan (Field Specialist)";
   const techNotes = selectedMission?.technicianNotes || selectedMission?.proofOfRepair?.notes || "Replaced damaged 150W modular luminaire core and verified photocell switch with nominal amp draw.";
@@ -320,14 +320,20 @@ export default function VerificationQueuePage() {
                         <span className="text-[10px] text-slate-500 font-mono">Report Intake</span>
                       </div>
                       <div className="relative h-56 rounded-xl overflow-hidden border border-rose-500/30 bg-slate-950 group">
-                        <img 
-                          src={beforePhoto} 
-                          alt="Before Fix" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                        />
-                        <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded bg-slate-950/85 backdrop-blur-sm text-[10px] font-mono text-rose-300 border border-rose-500/40">
-                          Original Defect Photo
-                        </div>
+                        {beforePhoto ? (
+                          <>
+                            <img 
+                              src={beforePhoto} 
+                              alt="Before Fix" 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                            />
+                            <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded bg-slate-950/85 backdrop-blur-sm text-[10px] font-mono text-rose-300 border border-rose-500/40">
+                              Original Defect Photo
+                            </div>
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs font-mono">No before photo available</div>
+                        )}
                       </div>
                     </div>
 
@@ -340,14 +346,20 @@ export default function VerificationQueuePage() {
                         <span className="text-[10px] text-slate-500 font-mono">Proof of Repair</span>
                       </div>
                       <div className="relative h-56 rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-950 group">
-                        <img 
-                          src={afterPhoto} 
-                          alt="After Fix" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                        />
-                        <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded bg-slate-950/85 backdrop-blur-sm text-[10px] font-mono text-emerald-300 border border-emerald-500/40">
-                          Field Completion Proof
-                        </div>
+                        {afterPhoto ? (
+                          <>
+                            <img 
+                              src={afterPhoto} 
+                              alt="After Fix" 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                            />
+                            <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded bg-slate-950/85 backdrop-blur-sm text-[10px] font-mono text-emerald-300 border border-emerald-500/40">
+                              Field Completion Proof
+                            </div>
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-500 text-xs font-mono">No after photo available</div>
+                        )}
                       </div>
                     </div>
                   </div>

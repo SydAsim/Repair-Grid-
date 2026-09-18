@@ -51,7 +51,7 @@ def create_report(
                 evidence_url = f"https://{bucket_name}.s3.amazonaws.com/{file_key}"
         except Exception as upload_err:
             print(f"S3 upload error for data URL: {upload_err}")
-            evidence_url = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800"
+            # Keep the original base64 data URL so the actual uploaded image is preserved
 
     evidence_refs = [evidence_url] if evidence_url else []
     

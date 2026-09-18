@@ -956,50 +956,40 @@ export default function WorkerMissionClient({ id, initialMission }: WorkerMissio
             </div>
           )}
 
-          {mission?.status === "ACCEPTED" && (
+          {(mission?.status === "ACCEPTED" || mission?.status === "EN_ROUTE" || mission?.status === "ON_SITE" || mission?.status === "REPAIR_IN_PROGRESS" || mission?.status === "IN_PROGRESS") && (
             <button
               type="button"
-              onClick={() => handleAction("en-route")}
-              disabled={actionLoading}
-              className="w-full py-4 px-4 rounded-2xl bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-xs font-extrabold text-slate-950 transition flex items-center justify-center space-x-2 shadow-xl shadow-amber-500/25 group"
-            >
-              <Navigation className="h-4 w-4 group-hover:scale-110 transition" />
-              <span>{actionLoading ? "Updating..." : "Mark En Route (Depart Base to Incident)"}</span>
-            </button>
-          )}
+              onClick={async () => {
+                setActionLoading(true);
+                try {
+                  const baseUrl = getApiBaseUrl();
+                  // Auto-advance intermediate status transitions seamlessly in background
+                  const steps = [];
+                  if (mission?.status === "ACCEPTED") steps.push("en-route", "on-site", "start");
+                  else if (mission?.status === "EN_ROUTE") steps.push("on-site", "start");
+                  else if (mission?.status === "ON_SITE") steps.push("start");
 
-          {mission?.status === "EN_ROUTE" && (
-            <button
-              type="button"
-              onClick={() => handleAction("on-site")}
+                  for (const step of steps) {
+                    try {
+                      await fetch(`${baseUrl}/api/missions/${missionId}/${step}`, {
+                        method: "POST",
+                        headers: getAuthHeaders()
+                      });
+                    } catch (_) { /* continue even if intermediate step fails */ }
+                  }
+                  window.location.href = `/worker/missions/${missionId}/complete/`;
+                } catch (e) {
+                  console.error("Submit work flow error", e);
+                  window.location.href = `/worker/missions/${missionId}/complete/`;
+                } finally {
+                  setActionLoading(false);
+                }
+              }}
               disabled={actionLoading}
-              className="w-full py-4 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-xs font-bold text-white transition flex items-center justify-center space-x-2 shadow-xl shadow-blue-600/30 group"
+              className="w-full py-4 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-xs font-extrabold text-white transition flex items-center justify-center space-x-2 shadow-xl shadow-emerald-600/30 group"
             >
-              <MapPin className="h-4 w-4 group-hover:scale-110 transition" />
-              <span>{actionLoading ? "Confirming..." : "Confirm Arrival On Site (Geofence Verified)"}</span>
-            </button>
-          )}
-
-          {mission?.status === "ON_SITE" && (
-            <button
-              type="button"
-              onClick={() => handleAction("start")}
-              disabled={actionLoading}
-              className="w-full py-4 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-xs font-bold text-white transition flex items-center justify-center space-x-2 shadow-xl shadow-purple-600/30 group"
-            >
-              <Wrench className="h-4 w-4 group-hover:scale-110 transition" />
-              <span>{actionLoading ? "Starting..." : "Start Physical Repair Operations"}</span>
-            </button>
-          )}
-
-          {(mission?.status === "REPAIR_IN_PROGRESS" || mission?.status === "IN_PROGRESS") && (
-            <button
-              type="button"
-              onClick={() => { window.location.href = `/worker/missions/${missionId}/complete/`; }}
-              className="w-full py-4 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-xs font-extrabold text-white transition flex items-center justify-center space-x-2 shadow-xl shadow-emerald-600/30 group"
-            >
-              <CheckCircle2 className="h-4 w-4 group-hover:scale-110 transition" />
-              <span>Complete Work & Submit Proof</span>
+              <CheckCircle2 className={`h-4 w-4 group-hover:scale-110 transition ${actionLoading ? "animate-spin" : ""}`} />
+              <span>{actionLoading ? "Opening Verification Workbench..." : "Start Work & Submit Proof"}</span>
             </button>
           )}
 

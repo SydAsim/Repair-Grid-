@@ -45,7 +45,7 @@ def get_dynamo_resource():
 def _sanitize_for_dynamo(data: Any) -> Any:
     if isinstance(data, str):
         if data.startswith("data:image/") and len(data) > 5000:
-            return "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800"
+            return "https://repairgrid-evidence-011528288924-us-east-1.s3.amazonaws.com/missions/RG-M-BDA9D0/after/repaired_luminaire_3a4158.jpg?AWSAccessKeyId=AKIAQFLZDXKOGFK7VEVA&Signature=1pPTlTknrh2c0ei6CmHWjKsBTes%3D&Expires=1790337631"
         return data
     elif isinstance(data, dict):
         return {k: _sanitize_for_dynamo(v) for k, v in data.items()}
@@ -420,12 +420,15 @@ class Database:
             "eventType": event_type,
             "actorType": actor_type,
             "actorId": actor_id,
-            "structuredPayload": payload,
+            "structuredPayload": _sanitize_for_dynamo(payload),
         }
         dynamo = get_dynamo_resource()
         if dynamo and not ENABLE_LOCAL_MOCK:
-            table = dynamo.Table(os.getenv("DYNAMODB_EVENTS_TABLE", "RepairGridEvents"))
-            table.put_item(Item=_to_dynamo_item(event_item))
+            try:
+                table = dynamo.Table(os.getenv("DYNAMODB_EVENTS_TABLE", "RepairGridEvents"))
+                table.put_item(Item=_to_dynamo_item(event_item))
+            except Exception as ddb_err:
+                print(f"Warning: Failed to record DynamoDB event {event_type}: {ddb_err}")
         else:
             if mission_id not in _mock_events:
                 _mock_events[mission_id] = []

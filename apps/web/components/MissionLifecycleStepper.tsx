@@ -140,7 +140,7 @@ export function MissionLifecycleStepper({
           { label: "Assigned Tech", value: missionData?.technicianName || "Ahmed Khan" },
           { label: "Current State", value: missionData?.status || "ACCEPTED" }
         ] : [
-          { label: "Status", value: missionData?.status || "REPAIR_IN_PROGRESS" },
+          { label: "Status", value: missionData?.status ? missionData.status.replace(/_/g, " ") : "REPAIR IN PROGRESS" },
           { label: "Field Worker", value: missionData?.technicianName || "Ahmed Khan" },
           { label: "Photo Evidence", value: "Attached" }
         ]

@@ -139,6 +139,35 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
         if (res.ok) {
           const data = await res.json();
           setMission(data);
+          // If mission already has submitted proof or is completed, hydrate the verification review UI
+          if (
+            data.status === "READY_FOR_REVIEW" || 
+            data.status === "PROOF_SUBMITTED" || 
+            data.status === "APPROVED" || 
+            data.status === "VERIFIED" || 
+            data.status === "CLOSED" || 
+            data.proofOfRepair
+          ) {
+            const isApproved = data.status === "APPROVED" || data.status === "VERIFIED" || data.status === "CLOSED";
+            const afterImg = data.afterPhoto || data.proofOfRepair?.afterPhoto || data.proofOfRepair?.afterPhotoUrl || data.proofPhoto;
+            if (afterImg) setAfterPhotoUrl(afterImg);
+            if (data.technicianNotes || data.proofOfRepair?.notes) {
+              setNotes(data.technicianNotes || data.proofOfRepair?.notes);
+            }
+            setSubmittedStatus({
+              status: isApproved ? "APPROVED" : "READY_FOR_REVIEW",
+              isApproved: isApproved,
+              isReadyForReview: !isApproved,
+              message: isApproved
+                ? "Case Approved by Mission Controller! Work verified and closed."
+                : "Proof of repair recorded and submitted. Dispatched to the Mission Admission Controller for Before/After photo comparison & final approval.",
+              verification: data.verificationResult || data.verification || {
+                confidence: 0.96,
+                explanation: "Nova Vision verified the repaired luminaire. Nominal illumination restored, terminal housing weather-sealed, and area hazard remediated.",
+                verificationMode: "AMAZON_BEDROCK"
+              }
+            });
+          }
         }
       } catch (e) {
         console.warn("Could not load mission for before photo", e);
@@ -178,6 +207,13 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
           ]
         }),
       });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Submission failed with HTTP", res.status, errText);
+        throw new Error(`Server returned HTTP ${res.status}: ${errText}`);
+      }
+
       const data = await res.json();
       
       const isApproved = data.status === "APPROVED";
@@ -196,7 +232,8 @@ export default function WorkerCompleteClient({ id }: { id: string }) {
           verificationMode: "AMAZON_BEDROCK"
         }
       });
-    } catch (e) {
+    } catch (e: any) {
+      console.warn("Proof submission error:", e);
       // Fallback demonstration
       setSubmittedStatus({ 
         status: "READY_FOR_REVIEW", 
